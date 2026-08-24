@@ -1,0 +1,88 @@
+project_id = "outcome-engine"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000", "outcomeengine://auth-callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+# There is no public signup — accounts start from an invite code, and the
+# redeem-invite function is what turns a fresh auth user into a member.
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+# Magic link is the primary flow; passwords are never collected.
+double_confirm_changes = true
+
+# --------------------------------------------------------------------------
+# Edge Functions
+#
+# verify_jwt = false only where a caller legitimately has no session:
+#   stripe-webhook  — authenticated by Stripe's own signature instead
+#   redeem-invite   — must validate a code before an account exists
+# Everything else requires a valid JWT before the function body runs.
+# --------------------------------------------------------------------------
+[functions.ingest-markets]
+verify_jwt = true
+
+[functions.score-markets]
+verify_jwt = true
+
+[functions.execute-trade]
+verify_jwt = true
+
+[functions.sync-resolutions]
+verify_jwt = true
+
+[functions.run-billing]
+verify_jwt = true
+
+[functions.signal-health]
+verify_jwt = true
+
+[functions.connect-kalshi]
+verify_jwt = true
+
+[functions.create-setup-intent]
+verify_jwt = true
+
+[functions.publish-model]
+verify_jwt = true
+
+[functions.run-backtest]
+verify_jwt = true
+
+[functions.send-notifications]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.redeem-invite]
+verify_jwt = false
+
+[functions.kalshi-balance]
+verify_jwt = true

@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E4E7EA;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#149A6D;text-decoration:none}a:hover{color:#1FBE87}
+*{box-sizing:border-box}
+input,button{font-family:inherit}
+.oe-scroll::-webkit-scrollbar{width:0}
+input[type=range]{-webkit-appearance:none;height:4px;border-radius:999px;background:#E3E6EA;width:100%}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:999px;background:currentColor;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;gap:44px;padding:48px 40px 80px">
+
+<div style="width:196px;position:sticky;top:48px;display:flex;flex-direction:column;gap:22px;padding-top:6px">
+<div>
+<div style="font:700 15px/1.2 Inter,sans-serif;letter-spacing:-.01em;color:#161B22">Outcome <span style="color:#1FBE87">Engine</span></div>
+<div style="font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:#9AA1AC;margin-top:5px">Member app · iOS</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.11em;color:#9AA1AC;text-transform:uppercase;margin-bottom:8px">Screens</div>
+<sc-for list="{{ railItems }}" as="r" hint-placeholder-count="9">
+<button onClick="{{ r.go }}" style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:6px 9px;border:none;border-radius:8px;cursor:pointer;background:{{ r.bg }};font:500 12.5px/1.3 Inter,sans-serif;color:{{ r.fg }}" style-hover="background:rgba(0,0,0,.05)">
+<span style="width:5px;height:5px;border-radius:99px;flex:none;background:{{ r.dot }}"></span>{{ r.label }}</button>
+</sc-for>
+</div>
+<div style="font:400 11px/1.6 Inter,sans-serif;color:#8A9199;border-top:1px solid rgba(0,0,0,.09);padding-top:14px">Everything is clickable. Mode toggle on the Decision Desk switches the whole app between paper and live.</div>
+</div>
+
+<div style="width:390px;height:844px;border-radius:42px;background:#F1F3F5;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 24px 60px -18px rgba(22,27,34,.34),0 0 0 1px rgba(22,27,34,.09)">
+
+<div style="height:50px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 7px;background:{{ statusBg }}">
+<span style="font:600 13px/1 'JetBrains Mono',monospace;color:{{ statusFg }}">9:41</span>
+<div style="display:flex;align-items:center;gap:5px">
+<span style="width:5px;height:5px;border-radius:99px;background:{{ statusFg }}"></span>
+<span style="width:5px;height:5px;border-radius:99px;background:{{ statusFg }}"></span>
+<span style="width:16px;height:9px;border-radius:2.5px;background:{{ statusFg }};opacity:.85"></span>
+</div>
+</div>
+
+<sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ false }}">
+<div class="oe-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
+<div style="padding:6px 24px 0;display:flex;align-items:center;gap:12px">
+<button onClick="{{ obBack }}" style="border:none;background:none;padding:4px 0;cursor:pointer;font:500 13px Inter,sans-serif;color:#69707C">← Back</button>
+<div style="flex:1;display:flex;gap:3px">
+<sc-for list="{{ obBars }}" as="b" hint-placeholder-count="7">
+<div style="height:3px;flex:1;border-radius:99px;background:{{ b.bg }}"></div>
+</sc-for>
+</div>
+<span style="font:500 10.5px 'JetBrains Mono',monospace;color:#9AA1AC">{{ obCount }}</span>
+</div>
+
+<div style="flex:1;padding:34px 24px 0">
+<div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.11em;text-transform:uppercase;color:#1FBE87;margin-bottom:12px">{{ ob.eyebrow }}</div>
+<h1 style="font:600 26px/1.22 Inter,sans-serif;letter-spacing:-.02em;color:#161B22;margin:0 0 10px;text-wrap:pretty">{{ ob.title }}</h1>
+<p style="font:400 14.5px/1.6 Inter,sans-serif;color:#69707C;margin:0 0 26px;text-wrap:pretty">{{ ob.body }}</p>
+
+<sc-if value="{{ ob.isInvite }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:8px;margin-bottom:16px">
+<sc-for list="{{ inviteChars }}" as="ch" hint-placeholder-count="6">
+<div style="flex:1;aspect-ratio:1/1.15;border-radius:12px;background:#fff;border:1px solid {{ ch.border }};display:flex;align-items:center;justify-content:center;font:600 20px 'JetBrains Mono',monospace;color:#161B22">{{ ch.v }}</div>
+</sc-for>
+</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#9AA1AC">No public signup. Codes come from an existing member.</div>
+</sc-if>
+
+<sc-if value="{{ ob.isAccount }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:16px">
+<div style="font:500 11px/1 Inter,sans-serif;color:#9AA1AC;margin-bottom:7px">Email</div>
+<div style="font:500 15px/1 'JetBrains Mono',monospace;color:#161B22">marcus@hey.com</div>
+<div style="height:1px;background:#E3E6EA;margin:14px -16px"></div>
+<div style="font:400 12.5px/1.55 Inter,sans-serif;color:#69707C">We send a magic link — no password to remember or lose.</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob.isExplainer }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ explainer }}" as="e" hint-placeholder-count="3">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:15px 16px;display:flex;gap:13px;align-items:flex-start">
+<span style="width:28px;height:28px;border-radius:99px;flex:none;background:{{ e.tint }};display:flex;align-items:center;justify-content:center;font:600 12px 'JetBrains Mono',monospace;color:{{ e.color }}">{{ e.mark }}</span>
+<div>
+<div style="font:600 13.5px/1.35 Inter,sans-serif;color:#161B22;margin-bottom:3px">{{ e.title }}</div>
+<div style="font:400 12.5px/1.55 Inter,sans-serif;color:#69707C;text-wrap:pretty">{{ e.body }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob.isAgree }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:4px 16px">
+<sc-for list="{{ agreements }}" as="a" hint-placeholder-count="4">
+<button onClick="{{ a.toggle }}" style="display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid {{ a.rule }};padding:14px 0;cursor:pointer">
+<span style="width:20px;height:20px;border-radius:6px;flex:none;margin-top:1px;border:1.5px solid {{ a.boxBorder }};background:{{ a.boxBg }};display:flex;align-items:center;justify-content:center;font:600 11px Inter,sans-serif;color:#fff">{{ a.check }}</span>
+<span style="font:400 13px/1.5 Inter,sans-serif;color:#3F4652;text-wrap:pretty">{{ a.text }}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob.isPayment }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:16px;margin-bottom:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+<span style="font:500 11px Inter,sans-serif;color:#9AA1AC">Card number</span>
+<span style="font:500 10px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#9AA1AC">STRIPE</span>
+</div>
+<div style="font:500 17px/1 'JetBrains Mono',monospace;color:#161B22;letter-spacing:.04em">4242 4242 4242 4242</div>
+<div style="display:flex;gap:26px;margin-top:16px">
+<div><div style="font:500 11px Inter,sans-serif;color:#9AA1AC;margin-bottom:5px">Expiry</div><div style="font:500 14px 'JetBrains Mono',monospace;color:#161B22">09 / 29</div></div>
+<div><div style="font:500 11px Inter,sans-serif;color:#9AA1AC;margin-bottom:5px">CVC</div><div style="font:500 14px 'JetBrains Mono',monospace;color:#161B22">•••</div></div>
+</div>
+</div>
+<div style="font:400 12.5px/1.55 Inter,sans-serif;color:#69707C;text-wrap:pretty">Required before live trading. Debit cards from Cash App and Venmo work here too. Nothing is charged today.</div>
+</sc-if>
+
+<sc-if value="{{ ob.isKalshi }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:9px;margin-bottom:14px">
+<sc-for list="{{ kalshiSteps }}" as="k" hint-placeholder-count="3">
+<div style="display:flex;gap:11px;align-items:flex-start">
+<span style="width:19px;height:19px;border-radius:99px;flex:none;background:#E7F8F1;color:#149A6D;font:600 10.5px 'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center;margin-top:1px">{{ k.n }}</span>
+<span style="font:400 13px/1.5 Inter,sans-serif;color:#3F4652;text-wrap:pretty">{{ k.text }}</span>
+</div>
+</sc-for>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:14px 16px">
+<div style="font:500 11px Inter,sans-serif;color:#9AA1AC;margin-bottom:7px">Paste your API key</div>
+<div style="font:500 12.5px/1.5 'JetBrains Mono',monospace;color:#161B22;word-break:break-all">kal_live_8f2c··········9d41</div>
+</div>
+<div style="display:flex;align-items:center;gap:7px;margin-top:11px">
+<span style="width:6px;height:6px;border-radius:99px;background:#1FBE87"></span>
+<span style="font:400 12px Inter,sans-serif;color:#69707C">Encrypted at rest. Profile pulled from Kalshi automatically.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob.isDone }}" hint-placeholder-val="{{ false }}">
+<div style="border-radius:20px;padding:22px;background:linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%);color:#fff">
+<div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.11em;text-transform:uppercase;opacity:.85;margin-bottom:10px">Paper mode</div>
+<div style="font:600 19px/1.35 Inter,sans-serif;margin-bottom:8px">You are set up and practicing</div>
+<div style="font:400 13px/1.55 Inter,sans-serif;opacity:.9;text-wrap:pretty">Take as many paper trades as you want — they never touch your Kalshi balance and never generate a fee. Switch to live on the Decision Desk when you are ready.</div>
+</div>
+</sc-if>
+</div>
+
+<div style="padding:20px 24px 26px;flex:none">
+<button onClick="{{ obNext }}" style="width:100%;padding:15px;border:none;border-radius:14px;cursor:pointer;color:#fff;font:600 14.5px Inter,sans-serif;background:{{ obCtaBg }};opacity:{{ obCtaOpacity }}">{{ ob.cta }}</button>
+<sc-if value="{{ ob.isAgree }}" hint-placeholder-val="{{ false }}">
+<div style="text-align:center;font:400 11.5px Inter,sans-serif;color:#9AA1AC;margin-top:10px">{{ agreeHint }}</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;padding:2px 20px 10px;display:flex;align-items:center;justify-content:space-between;background:{{ statusBg }}">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="font:700 14px/1 Inter,sans-serif;letter-spacing:-.01em;color:{{ statusFg }}">{{ screenTitle }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;padding:3.5px 6px;border-radius:5px;background:{{ modePill.bg }};color:{{ modePill.fg }};border:1px dashed {{ modePill.border }}">{{ modePill.label }}</span>
+</div>
+<div style="display:flex;align-items:center;gap:14px">
+<button onClick="{{ goNotif }}" style="border:none;background:none;cursor:pointer;padding:0;position:relative;display:flex">
+<span style="width:15px;height:15px;border-radius:5px 5px 0 0;border:1.6px solid {{ bellFg }};border-bottom:none;display:block"></span>
+<span style="position:absolute;bottom:-2px;left:-2px;width:19px;height:1.6px;background:{{ bellFg }}"></span>
+<span style="position:absolute;top:-3px;right:-4px;width:7px;height:7px;border-radius:99px;background:#E2544F;border:1.5px solid {{ statusBg }}"></span>
+</button>
+<div style="width:27px;height:27px;border-radius:99px;background:linear-gradient(140deg,#3E7BFA,#1FBE87);opacity:.9"></div>
+</div>
+</div>
+
+<div class="oe-scroll" style="flex:1;overflow-y:auto;padding:14px 20px 26px">
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="border-radius:20px;padding:19px 20px;background:linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%);color:#fff">
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+<div>
+<div style="font:500 11px/1 Inter,sans-serif;opacity:.85;letter-spacing:.01em">Net this period</div>
+<div style="font:600 34px/1.1 'JetBrains Mono',monospace;letter-spacing:-.02em;margin-top:9px">{{ periodPnl }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);padding:5px 9px;border-radius:99px">
+<span style="width:6px;height:6px;border-radius:99px;background:#fff"></span>
+<span style="font:500 10.5px/1 Inter,sans-serif">Kalshi live</span>
+</div>
+</div>
+<div style="height:1px;background:rgba(255,255,255,.24);margin:16px 0 12px"></div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div style="font:400 12px/1.4 Inter,sans-serif;opacity:.9">Fee accruing <span style="font-family:'JetBrains Mono',monospace;font-weight:500">{{ feeAccruing }}</span> · bills {{ billDate }}</div>
+<button onClick="{{ goBilling }}" style="border:none;background:rgba(255,255,255,.2);color:#fff;font:600 11px Inter,sans-serif;padding:6px 11px;border-radius:99px;cursor:pointer">Billing</button>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:14px">
+<div style="font:500 21px/1 'JetBrains Mono',monospace;color:#161B22">{{ balance }}</div>
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">Kalshi balance</div>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:14px">
+<div style="font:500 21px/1 'JetBrains Mono',monospace;color:#161B22">$680</div>
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">In open positions</div>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;display:flex">
+<sc-for list="{{ homeStats }}" as="s" hint-placeholder-count="3">
+<div style="flex:1;padding:14px 12px;text-align:center;border-left:1px solid {{ s.rule }}">
+<div style="font:500 16px/1 'JetBrains Mono',monospace;color:#161B22">{{ s.value }}</div>
+<div style="font:400 10.5px/1.3 Inter,sans-serif;color:#9AA1AC;margin-top:6px">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+
+<div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Today's strongest picks</span>
+<button onClick="{{ goDesk }}" style="border:none;background:none;cursor:pointer;font:600 12px Inter,sans-serif;color:#149A6D;padding:0">Decision Desk →</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ topPicks }}" as="m" hint-placeholder-count="2">
+<button onClick="{{ m.open }}" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:12px;cursor:pointer" style-hover="border-color:#C9CFD6">
+<svg width="40" height="40" viewBox="0 0 48 48" style="transform:rotate(-90deg);flex:none">
+<circle cx="24" cy="24" r="20" fill="none" stroke="#EBEEF1" stroke-width="4"></circle>
+<circle cx="24" cy="24" r="20" fill="none" stroke="{{ m.ringColor }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="{{ m.ringOff }}"></circle>
+</svg>
+<div style="flex:1;min-width:0">
+<div style="font:500 13px/1.35 Inter,sans-serif;color:#161B22;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.question }}</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:5px">{{ m.category }} · {{ m.side }}</div>
+</div>
+<div style="text-align:right;flex:none">
+<div style="font:600 14px/1 'JetBrains Mono',monospace;color:{{ m.ringColor }}">{{ m.scoreStr }}</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#9AA1AC;margin-top:5px">{{ m.priceCents }}</div>
+</div>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:9px">Recent activity</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<sc-for list="{{ homeActivity }}" as="a" hint-placeholder-count="3">
+<div style="display:flex;gap:11px;align-items:center;padding:12px 14px;border-top:1px solid {{ a.rule }}">
+<span style="width:6px;height:6px;border-radius:99px;flex:none;background:{{ a.color }}"></span>
+<span style="flex:1;font:400 12.5px/1.4 Inter,sans-serif;color:#3F4652;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.detail }}</span>
+<span style="font:400 10.5px 'JetBrains Mono',monospace;color:#9AA1AC;flex:none">{{ a.time }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDesk }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;gap:4px;padding:4px;border-radius:14px;background:#E7EAEE">
+<button onClick="{{ setPaper }}" style="flex:1;padding:9px;border:none;border-radius:11px;cursor:pointer;font:600 13px Inter,sans-serif;background:{{ paperTab.bg }};color:{{ paperTab.fg }};box-shadow:{{ paperTab.shadow }}">Paper</button>
+<button onClick="{{ setLive }}" style="flex:1;padding:9px;border:none;border-radius:11px;cursor:pointer;font:600 13px Inter,sans-serif;background:{{ liveTab.bg }};color:{{ liveTab.fg }};box-shadow:{{ liveTab.shadow }}">Live</button>
+</div>
+
+<sc-if value="{{ isPaper }}" hint-placeholder-val="{{ true }}">
+<div style="border:1px dashed #C6CCD4;border-radius:14px;padding:12px 14px;background:#F7F8FA;display:flex;gap:11px;align-items:center">
+<span style="width:26px;height:26px;border-radius:8px;background:#E7EAEE;flex:none"></span>
+<div style="font:400 12px/1.45 Inter,sans-serif;color:#69707C">Practice mode. Nothing here uses real money and no fee is ever charged on a paper trade.</div>
+</div>
+</sc-if>
+<sc-if value="{{ isLive }}" hint-placeholder-val="{{ false }}">
+<div style="border:1px solid #B9EBD6;border-radius:14px;padding:13px 15px;background:#E7F8F1;display:flex;justify-content:space-between;align-items:center">
+<div>
+<div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#149A6D;text-transform:uppercase">Live · real money</div>
+<div style="font:600 17px/1 'JetBrains Mono',monospace;color:#0F7A56;margin-top:8px">{{ periodPnl }} <span style="font:400 11px Inter,sans-serif;color:#149A6D">this period</span></div>
+</div>
+<div style="text-align:right">
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#149A6D">Fee accruing</div>
+<div style="font:500 14px/1 'JetBrains Mono',monospace;color:#0F7A56;margin-top:7px">{{ feeAccruing }}</div>
+</div>
+</div>
+</sc-if>
+
+<div style="display:flex;align-items:center;justify-content:space-between">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">{{ deskCount }}</span>
+<div style="display:flex;gap:6px">
+<button onClick="{{ setStrong }}" style="padding:6px 12px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ strongChip.border }};background:{{ strongChip.bg }};color:{{ strongChip.fg }}">Strong 7+</button>
+<button onClick="{{ setAll }}" style="padding:6px 12px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ allChip.border }};background:{{ allChip.bg }};color:{{ allChip.fg }}">All</button>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ deskMarkets }}" as="m" hint-placeholder-count="3">
+<button onClick="{{ m.open }}" style="width:100%;text-align:left;background:#fff;border:1px solid #E3E6EA;border-radius:18px;padding:15px;cursor:pointer;display:block" style-hover="border-color:#C9CFD6">
+<div style="display:flex;gap:14px;align-items:flex-start">
+<div style="position:relative;width:52px;height:52px;flex:none">
+<svg width="52" height="52" viewBox="0 0 48 48" style="transform:rotate(-90deg)">
+<circle cx="24" cy="24" r="20" fill="none" stroke="#EBEEF1" stroke-width="4"></circle>
+<circle cx="24" cy="24" r="20" fill="none" stroke="{{ m.ringColor }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="{{ m.ringOff }}"></circle>
+</svg>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 15px 'JetBrains Mono',monospace;color:{{ m.ringColor }}">{{ m.scoreStr }}</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+<span style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#9AA1AC">{{ m.category }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;padding:3px 5px;border-radius:4px;color:{{ m.sideColor }};background:{{ m.sideBg }}">{{ m.side }}</span>
+</div>
+<div style="font:500 14.5px/1.35 Inter,sans-serif;color:#161B22;text-wrap:pretty">{{ m.question }}</div>
+</div>
+<div style="text-align:right;flex:none">
+<div style="font:500 15px/1 'JetBrains Mono',monospace;color:#161B22">{{ m.priceCents }}</div>
+<div style="font:400 10px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">chance</div>
+</div>
+</div>
+<sc-if value="{{ m.hasTag }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:8px;align-items:center;margin-top:12px;padding-top:11px;border-top:1px solid #EDEFF2">
+<span style="width:5px;height:5px;border-radius:99px;flex:none;background:{{ m.tagColor }}"></span>
+<span style="font:400 12px/1.4 Inter,sans-serif;color:#69707C">{{ m.tagText }}</span>
+</div>
+</sc-if>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:18px">
+<button onClick="{{ goDesk }}" style="border:none;background:none;padding:0;cursor:pointer;font:500 13px Inter,sans-serif;color:#69707C;text-align:left">← Decision Desk</button>
+
+<div style="display:flex;gap:16px;align-items:flex-start">
+<div style="position:relative;width:84px;height:84px;flex:none">
+<svg width="84" height="84" viewBox="0 0 48 48" style="transform:rotate(-90deg)">
+<circle cx="24" cy="24" r="20" fill="none" stroke="#E6E9ED" stroke-width="3.4"></circle>
+<circle cx="24" cy="24" r="20" fill="none" stroke="{{ sel.ringColor }}" stroke-width="3.4" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="{{ sel.ringOff }}"></circle>
+</svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+<span style="font:600 24px/1 'JetBrains Mono',monospace;color:{{ sel.ringColor }}">{{ sel.scoreStr }}</span>
+<span style="font:400 8.5px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#9AA1AC;margin-top:4px">/ 10</span>
+</div>
+</div>
+<div style="padding-top:4px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+<span style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#9AA1AC">{{ sel.category }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;padding:3px 5px;border-radius:4px;color:{{ sel.sideColor }};background:{{ sel.sideBg }}">{{ sel.side }}</span>
+</div>
+<h2 style="font:600 18px/1.3 Inter,sans-serif;letter-spacing:-.01em;color:#161B22;margin:0;text-wrap:pretty">{{ sel.question }}</h2>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;display:flex">
+<div style="flex:1;padding:13px 15px;border-right:1px solid #EDEFF2">
+<div style="font:500 17px/1 'JetBrains Mono',monospace;color:#161B22">{{ sel.priceCents }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">current price</div>
+</div>
+<div style="flex:1;padding:13px 15px">
+<div style="font:500 12px/1 'JetBrains Mono',monospace;color:#161B22">{{ sel.id }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">market · scored {{ modelVersion }}</div>
+</div>
+</div>
+
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:12px">Why this score</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ sel.bars }}" as="b" hint-placeholder-count="3">
+<div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px">
+<span style="font:400 12.5px Inter,sans-serif;color:#69707C">{{ b.label }}</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:{{ b.color }}">{{ b.value }}</span>
+</div>
+<div style="height:6px;border-radius:99px;background:#E7EAEE;overflow:hidden">
+<div style="height:6px;border-radius:99px;background:{{ b.color }};width:{{ b.width }}"></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{ sel.hasTag }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:11px;align-items:flex-start;border-radius:14px;padding:13px 14px;background:{{ sel.tagBg }};border:1px solid {{ sel.tagBorder }}">
+<span style="width:18px;height:18px;border-radius:99px;flex:none;background:{{ sel.tagColor }};color:#fff;font:600 11px 'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center">{{ sel.tagMark }}</span>
+<div>
+<div style="font:600 12.5px/1.35 Inter,sans-serif;color:{{ sel.tagFg }};margin-bottom:3px">{{ sel.tagKind }}</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;text-wrap:pretty">{{ sel.tagText }}</div>
+</div>
+</div>
+</sc-if>
+
+<div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Stake this {{ sel.side }} position</span>
+<span style="font:400 11px Inter,sans-serif;color:#9AA1AC">balance <span style="font-family:'JetBrains Mono',monospace">{{ balance }}</span></span>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:18px;padding:16px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<div style="font:500 13px Inter,sans-serif;color:#161B22">Contracts</div>
+<div style="font:400 11px Inter,sans-serif;color:#9AA1AC;margin-top:4px">at {{ sel.priceCents }} each</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<button onClick="{{ dec }}" style="width:34px;height:34px;border-radius:99px;border:1px solid #E3E6EA;background:#fff;cursor:pointer;font:400 18px/1 Inter,sans-serif;color:#69707C">−</button>
+<span style="font:600 18px 'JetBrains Mono',monospace;color:#161B22;min-width:44px;text-align:center">{{ contracts }}</span>
+<button onClick="{{ inc }}" style="width:34px;height:34px;border-radius:99px;border:1px solid #E3E6EA;background:#fff;cursor:pointer;font:400 18px/1 Inter,sans-serif;color:#69707C">+</button>
+</div>
+</div>
+<div style="display:flex;gap:6px;margin-top:14px">
+<sc-for list="{{ quickSizes }}" as="q" hint-placeholder-count="4">
+<button onClick="{{ q.go }}" style="flex:1;padding:7px;border-radius:9px;cursor:pointer;font:600 11.5px 'JetBrains Mono',monospace;border:1px solid {{ q.border }};background:{{ q.bg }};color:{{ q.fg }}">{{ q.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;margin:16px -16px 0;padding:14px 16px 0;border-top:1px solid #EDEFF2">
+<div style="flex:1">
+<div style="font:500 15px/1 'JetBrains Mono',monospace;color:#161B22">{{ stake.cost }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">you put in</div>
+</div>
+<div style="flex:1">
+<div style="font:500 15px/1 'JetBrains Mono',monospace;color:#149A6D">{{ stake.profit }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">if it hits</div>
+</div>
+<div style="flex:1">
+<div style="font:500 15px/1 'JetBrains Mono',monospace;color:#161B22">{{ stake.payout }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">total payout</div>
+</div>
+</div>
+<sc-if value="{{ isLive }}" hint-placeholder-val="{{ false }}">
+<div style="margin:14px -16px 0;padding:13px 16px 0;border-top:1px solid #EDEFF2">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span style="font:400 12px Inter,sans-serif;color:#69707C">Platform fee · 20% of profit</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#B87914">{{ stake.fee }}</span>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="font:500 12px Inter,sans-serif;color:#3F4652">You'd keep</span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#149A6D">{{ stake.keep }}</span>
+</div>
+<div style="font:400 11px/1.5 Inter,sans-serif;color:#9AA1AC;margin-top:9px;text-wrap:pretty">Estimate only — your actual bill nets this against any losses in the same billing period.</div>
+</div>
+</sc-if>
+<sc-if value="{{ overBalance }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:14px;border-radius:12px;background:#FBE9E8;padding:11px 13px;display:flex;gap:9px;align-items:center">
+<span style="width:5px;height:5px;border-radius:99px;background:#E2544F;flex:none"></span>
+<span style="font:400 12px/1.4 Inter,sans-serif;color:#9A2E2A">This exceeds your Kalshi balance. Lower the size or add funds on Kalshi.</span>
+</div>
+</sc-if>
+</div>
+</div>
+
+<button disabled="{{ overBalance }}" style="width:100%;padding:16px;border:none;border-radius:15px;cursor:pointer;color:#fff;font:600 15px Inter,sans-serif;background:{{ ctaBg }};opacity:{{ ctaOpacity }}">{{ ctaLabel }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isPositions }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;display:flex">
+<sc-for list="{{ posStats }}" as="s" hint-placeholder-count="3">
+<div style="flex:1;padding:14px 12px;text-align:center;border-left:1px solid {{ s.rule }}">
+<div style="font:500 17px/1 'JetBrains Mono',monospace;color:#161B22">{{ s.value }}</div>
+<div style="font:400 10.5px/1.3 Inter,sans-serif;color:#9AA1AC;margin-top:6px">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:9px">Open</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ openPos }}" as="p" hint-placeholder-count="3">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:14px">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:11px">
+<div style="font:500 13.5px/1.35 Inter,sans-serif;color:#161B22;text-wrap:pretty">{{ p.market }}</div>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;padding:4px 6px;border-radius:5px;flex:none;color:{{ p.modeFg }};background:{{ p.modeBg }};border:1px {{ p.modeStroke }} {{ p.modeBorder }}">{{ p.modeLabel }}</span>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:flex-end">
+<div>
+<div style="font:500 12.5px/1 'JetBrains Mono',monospace;color:#3F4652">{{ p.track }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">{{ p.size }} · scored {{ p.model }} at entry</div>
+</div>
+<div style="font:600 16px/1 'JetBrains Mono',monospace;color:{{ p.pnlColor }}">{{ p.pnl }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:9px">Resolved</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<sc-for list="{{ resolvedPos }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;gap:11px;align-items:center;padding:13px 14px;border-top:1px solid {{ r.rule }}">
+<span style="width:18px;height:18px;border-radius:99px;flex:none;background:{{ r.tint }};color:{{ r.color }};font:600 10px 'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center">{{ r.mark }}</span>
+<span style="flex:1;font:400 12.5px/1.4 Inter,sans-serif;color:#3F4652;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.market }}</span>
+<span style="font:500 13px 'JetBrains Mono',monospace;color:{{ r.color }};flex:none">{{ r.pnl }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isPerf }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;gap:5px">
+<sc-for list="{{ ranges }}" as="r" hint-placeholder-count="4">
+<button onClick="{{ r.go }}" style="flex:1;padding:7px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ r.border }};background:{{ r.bg }};color:{{ r.fg }}">{{ r.label }}</button>
+</sc-for>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:18px;padding:17px 17px 6px">
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC">Net PnL · {{ range }}</div>
+<div style="font:600 30px/1 'JetBrains Mono',monospace;color:#149A6D;margin-top:10px;letter-spacing:-.02em">{{ perf.pnl }}</div>
+<div style="display:flex;gap:20px;margin-top:14px">
+<div><span style="font:500 13px 'JetBrains Mono',monospace;color:#161B22">{{ perf.winRate }}</span><span style="font:400 11px Inter,sans-serif;color:#9AA1AC"> win rate</span></div>
+<div><span style="font:500 13px 'JetBrains Mono',monospace;color:#E2544F">{{ perf.dd }}</span><span style="font:400 11px Inter,sans-serif;color:#9AA1AC"> max drawdown</span></div>
+</div>
+<svg viewBox="0 0 320 108" width="100%" height="108" style="display:block;margin-top:12px;overflow:visible">
+<defs><linearGradient id="oeEq" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1FBE87" stop-opacity=".28"></stop><stop offset="100%" stop-color="#1FBE87" stop-opacity="0"></stop></linearGradient></defs>
+<path d="{{ perf.area }}" fill="url(#oeEq)"></path>
+<path d="{{ perf.line }}" fill="none" stroke="#1FBE87" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>
+</svg>
+</div>
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:10px">PnL by category</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:15px;display:flex;flex-direction:column;gap:13px">
+<sc-for list="{{ perf.cats }}" as="c" hint-placeholder-count="4">
+<div>
+<div style="display:flex;justify-content:space-between;margin-bottom:7px">
+<span style="font:400 12.5px Inter,sans-serif;color:#69707C">{{ c.label }}</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:{{ c.color }}">{{ c.value }}</span>
+</div>
+<div style="height:5px;border-radius:99px;background:#EDEFF2;overflow:hidden">
+<div style="height:5px;border-radius:99px;background:{{ c.color }};width:{{ c.width }}"></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:14px">
+<div style="font:500 18px/1 'JetBrains Mono',monospace;color:#161B22">2.4d</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">avg hold time</div>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:14px">
+<div style="font:500 18px/1 'JetBrains Mono',monospace;color:#161B22">{{ perf.trades }}</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">trades</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isActivity }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:13px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:13px;padding:10px 13px;display:flex;gap:9px;align-items:center">
+<span style="width:11px;height:11px;border-radius:99px;border:1.6px solid #9AA1AC;flex:none"></span>
+<input placeholder="Search your activity" style="border:none;outline:none;flex:1;font:400 13px Inter,sans-serif;color:#161B22;background:none">
+</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<sc-for list="{{ actChips }}" as="c" hint-placeholder-count="5">
+<button onClick="{{ c.go }}" style="padding:6px 11px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+</sc-for>
+</div>
+<div style="font:400 11.5px Inter,sans-serif;color:#9AA1AC">Your own events only.</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<sc-for list="{{ activityRows }}" as="a" hint-placeholder-count="5">
+<div style="display:flex;gap:12px;padding:13px 14px;border-top:1px solid {{ a.rule }}">
+<span style="font:400 10.5px 'JetBrains Mono',monospace;color:#9AA1AC;width:52px;flex:none;padding-top:3px">{{ a.time }}</span>
+<div style="flex:1;min-width:0">
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.07em;text-transform:uppercase;padding:3.5px 6px;border-radius:5px;color:{{ a.fg }};background:{{ a.bg }}">{{ a.event }}</span>
+<div style="font:400 12.5px/1.45 Inter,sans-serif;color:#3F4652;margin-top:8px;text-wrap:pretty">{{ a.detail }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isBilling }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="border-radius:16px;border:1px solid #F0D8A8;background:#FBF1DF;padding:14px 15px">
+<div style="font:600 12.5px/1.35 Inter,sans-serif;color:#8A5B0E;margin-bottom:5px">Your July payment failed</div>
+<div style="font:400 12px/1.5 Inter,sans-serif;color:#8A5B0E;opacity:.85;text-wrap:pretty">Live trading stays on until Sep 4. Update your card or pay the invoice manually to avoid a pause.</div>
+<div style="display:flex;gap:8px;margin-top:12px">
+<button style="flex:1;padding:9px;border:none;border-radius:10px;background:#8A5B0E;color:#fff;font:600 12px Inter,sans-serif;cursor:pointer">Update card</button>
+<button style="flex:1;padding:9px;border:1px solid #D8B274;border-radius:10px;background:none;color:#8A5B0E;font:600 12px Inter,sans-serif;cursor:pointer">Pay $54.28 now</button>
+</div>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:18px;padding:17px">
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC">Current period · Aug 1 – Aug 31</div>
+<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:13px">
+<div>
+<div style="font:600 24px/1 'JetBrains Mono',monospace;color:#149A6D">{{ periodPnl }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">net profit so far</div>
+</div>
+<div style="text-align:right">
+<div style="font:600 24px/1 'JetBrains Mono',monospace;color:#161B22">{{ feeAccruing }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">fee accruing · 20%</div>
+</div>
+</div>
+<div style="height:1px;background:#EDEFF2;margin:15px -17px"></div>
+<div style="font:400 11.5px/1.55 Inter,sans-serif;color:#69707C;text-wrap:pretty">Losses in this period offset wins before the fee is calculated. Charged to your card on Sep 1, never taken from your Kalshi balance. Paper trades are excluded.</div>
+</div>
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:9px">Invoices</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<sc-for list="{{ invoices }}" as="i" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-top:1px solid {{ i.rule }}">
+<div style="flex:1">
+<div style="font:500 13px/1 Inter,sans-serif;color:#161B22">{{ i.month }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">net {{ i.net }} · fee 20%</div>
+</div>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.07em;text-transform:uppercase;padding:4px 7px;border-radius:5px;color:{{ i.fg }};background:{{ i.bg }}">{{ i.status }}</span>
+<span style="font:500 13px 'JetBrains Mono',monospace;color:#161B22;width:60px;text-align:right">{{ i.amount }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:9px">Payment method</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:15px;display:flex;align-items:center;gap:12px">
+<span style="width:34px;height:23px;border-radius:5px;background:#E7EAEE;flex:none"></span>
+<div style="flex:1">
+<div style="font:500 13px/1 'JetBrains Mono',monospace;color:#161B22">•••• 4242</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">expires 09/29</div>
+</div>
+<button style="border:1px solid #E3E6EA;background:none;border-radius:9px;padding:7px 11px;font:600 11.5px Inter,sans-serif;color:#69707C;cursor:pointer">Change</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isNotif }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="border-radius:18px;padding:17px;background:#fff;border:1px solid #BFD3FB">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+<span style="width:6px;height:6px;border-radius:99px;background:#3E7BFA"></span>
+<span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#1E4FB8">Version transition · 11 days left</span>
+</div>
+<div style="font:600 14.5px/1.35 Inter,sans-serif;color:#161B22;margin-bottom:6px">v3 changed how your open trades score</div>
+<div style="font:400 12.5px/1.55 Inter,sans-serif;color:#69707C;margin-bottom:14px;text-wrap:pretty">Pick which stable version scores your view. v2 retires Sep 6 and everything moves to v3 automatically.</div>
+<div style="display:flex;gap:8px">
+<sc-for list="{{ versions }}" as="v" hint-placeholder-count="2">
+<button onClick="{{ v.go }}" style="flex:1;text-align:left;padding:11px 12px;border-radius:12px;cursor:pointer;border:1.5px solid {{ v.border }};background:{{ v.bg }}">
+<div style="font:600 12.5px/1 'JetBrains Mono',monospace;color:{{ v.fg }}">{{ v.label }}</div>
+<div style="font:400 10.5px/1.35 Inter,sans-serif;color:#9AA1AC;margin-top:6px">{{ v.note }}</div>
+</button>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ notifs }}" as="n" hint-placeholder-count="5">
+<div style="background:{{ n.cardBg }};border:1px solid {{ n.cardBorder }};border-radius:16px;padding:14px;display:flex;gap:11px">
+<span style="width:7px;height:7px;border-radius:99px;flex:none;margin-top:5px;background:{{ n.dot }}"></span>
+<div style="flex:1">
+<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+<span style="font:600 13px/1.3 Inter,sans-serif;color:#161B22">{{ n.title }}</span>
+<span style="font:400 10.5px 'JetBrains Mono',monospace;color:#9AA1AC;flex:none">{{ n.time }}</span>
+</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:5px;text-wrap:pretty">{{ n.body }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="font:400 11.5px/1.6 Inter,sans-serif;color:#9AA1AC;text-align:center;padding:0 12px">Push notifications cover resolutions, billing and new model versions. Score-threshold alerts are optional.</div>
+</div>
+</sc-if>
+
+</div>
+
+<div style="flex:none;display:flex;padding:8px 10px 22px;background:#fff;border-top:1px solid #E6E9ED">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+<button onClick="{{ t.go }}" style="flex:1;background:none;border:none;cursor:pointer;padding:7px 0 4px;display:flex;flex-direction:column;align-items:center;gap:7px">
+<span style="width:18px;height:18px;border-radius:{{ t.radius }};border:1.8px solid {{ t.color }};background:{{ t.fill }}"></span>
+<span style="font:600 10px/1 Inter,sans-serif;color:{{ t.color }}">{{ t.label }}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:700,&quot;height&quot;:980},&quot;startOnboarding&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototype&quot;},&quot;startInLive&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototype&quot;}}">
+class Component extends DCLogic {
+  state = { screen: "home", mode: "paper", strong: true, selId: null, contracts: 50, ob: 0, range: "30D", act: "All", ver: "v3", agreed: [false, false, false, false] };
+
+  C = { text: "#161B22", body: "#3F4652", muted: "#69707C", faint: "#9AA1AC", border: "#E3E6EA", green: "#1FBE87", greenDark: "#149A6D", blue: "#3E7BFA", red: "#E2544F", gold: "#DE9F35", violet: "#8B6FD8" };
+
+  GRAD = "linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%)";
+  BAL = 1284.6;
+
+  MARKETS = [
+    { id: "KXFED-26SEP", question: "Will the Fed cut rates at the September meeting?", category: "Economics", side: "YES", price: 0.71, score: 8.4, bd: { micro: 5.1, news: 2.0, base: 1.3 }, tag: { text: "Volume is 4× its 30-day average with no matching news event.", sev: "caution", kind: "Unusual volume" } },
+    { id: "KXGOV-SHUT26", question: "Government shutdown before November 1st?", category: "Politics", side: "NO", price: 0.82, score: 7.6, bd: { micro: 3.9, news: 2.2, base: 1.5 }, tag: { text: "Thin book on the NO side — exiting early could cost several cents.", sev: "caution", kind: "Low liquidity" } },
+    { id: "KXTEMP-NYC", question: "Will NYC hit 90°F this week?", category: "Weather", side: "YES", price: 0.62, score: 7.2, bd: { micro: 3.8, news: 0.4, base: 3.0 }, tag: null },
+    { id: "KXCPI-OCT26", question: "Will October CPI come in above 3.0%?", category: "Economics", side: "YES", price: 0.44, score: 6.8, bd: { micro: 3.9, news: 1.9, base: 1.0 }, tag: { text: "Coverage is one-sided but the price hasn't moved yet.", sev: "info", kind: "News lead" } },
+    { id: "KXOIL-90", question: "Will WTI crude close above $90 in September?", category: "Economics", side: "NO", price: 0.77, score: 5.9, bd: { micro: 2.4, news: 2.1, base: 1.4 }, tag: null }
+  ];
+
+  BAR_LABEL = { micro: "Market activity", news: "News", base: "Track record" };
+
+  stepFor(n) { return n >= 500 ? 100 : n >= 100 ? 50 : 10; }
+
+  money(n) {
+    const abs = Math.abs(n);
+    const grouped = abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d)(?=\.))/g, ",");
+    return (n < 0 ? "-$" : "$") + grouped;
+  }
+  cents(p) { return Math.round(p * 100) + "\u00A2"; }
+  barColor(k) { return k === "micro" ? this.C.green : k === "news" ? this.C.blue : this.C.violet; }
+  ringColor(s) { return s >= 7 ? this.C.green : s >= 4.5 ? this.C.gold : this.C.red; }
+
+  mkt(m) {
+    const CIRC = 125.66;
+    const tag = m.tag;
+    const caution = tag && tag.sev === "caution";
+    return {
+      ...m,
+      scoreStr: m.score.toFixed(1),
+      priceCents: this.cents(m.price),
+      ringColor: this.ringColor(m.score),
+      ringOff: (CIRC - (m.score / 10) * CIRC).toFixed(1),
+      sideColor: m.side === "NO" ? "#9A2E2A" : "#1E4FB8",
+      sideBg: m.side === "NO" ? "#FBE9E8" : "#E9F0FF",
+      hasTag: !!tag,
+      tagText: tag ? tag.text : "",
+      tagKind: tag ? tag.kind : "",
+      tagColor: caution ? this.C.gold : this.C.blue,
+      tagBg: caution ? "#FDF6EA" : "#F0F5FF",
+      tagBorder: caution ? "#F0DDB8" : "#D3E1FD",
+      tagFg: caution ? "#8A5B0E" : "#1E4FB8",
+      tagMark: caution ? "!" : "i",
+      bars: ["micro", "news", "base"].map(k => ({ label: this.BAR_LABEL[k], color: this.barColor(k), value: m.bd[k].toFixed(1), width: (m.bd[k] / 10 * 100).toFixed(0) + "%" })),
+      open: () => this.setState({ screen: "detail", selId: m.id, contracts: 50 })
+    };
+  }
+
+  curve(vals, w, h) {
+    const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+    const pts = vals.map((v, i) => [(i / (vals.length - 1)) * w, h - ((v - min) / span) * (h - 8) - 4]);
+    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    return { line, area: line + " L" + w + " " + h + " L0 " + h + " Z" };
+  }
+
+  chip(active) {
+    return active
+      ? { bg: "#E7F8F1", fg: "#149A6D", border: this.C.green }
+      : { bg: "transparent", fg: this.C.faint, border: this.C.border };
+  }
+
+  OB = [
+    { eyebrow: "Step 1 of 7", title: "Enter your invite code", body: "Outcome Engine is invite-only. A member sent you a six-character code or a link that fills it in for you.", cta: "Verify code", isInvite: true },
+    { eyebrow: "Step 2 of 7", title: "Create your account", body: "One email, one magic link. We use it for sign-in, resolution alerts and receipts.", cta: "Send magic link", isAccount: true },
+    { eyebrow: "Step 3 of 7", title: "How this works", body: "Three things to know before you trade. Nothing here is automated — the model scores, you decide.", cta: "Got it", isExplainer: true },
+    { eyebrow: "Step 4 of 7", title: "Agree to the basics", body: "Plain language, no fine print. Tap each one.", cta: "Agree and continue", isAgree: true },
+    { eyebrow: "Step 5 of 7", title: "Add a payment method", body: "Fees are billed monthly by card. You can stay in paper mode as long as you like.", cta: "Save card", isPayment: true },
+    { eyebrow: "Step 6 of 7", title: "Connect Kalshi", body: "You trade through your own Kalshi account. We never hold your funds.", cta: "Connect account", isKalshi: true },
+    { eyebrow: "Step 7 of 7", title: "Start in paper mode", body: "", cta: "Open the app", isDone: true }
+  ];
+
+  EXPLAINER = [
+    { mark: "1", title: "The score is a recommendation", body: "1–10 from a weighted signal model. 7 and up is a strong pick. You choose whether to take it.", tint: "#E7F8F1", color: "#149A6D" },
+    { mark: "2", title: "Paper first, live when ready", body: "Paper trades use no real money and never generate a fee. Live trades go through your own Kalshi account.", tint: "#E9F0FF", color: "#1E4FB8" },
+    { mark: "3", title: "We take 20% of net profit", body: "Per billing period, losses offset wins. Batched monthly and charged to your card — never from your Kalshi balance.", tint: "#FBF1DF", color: "#8A5B0E" }
+  ];
+
+  AGREE = [
+    "I understand the score is a recommendation, not advice, and every trade is my own decision.",
+    "I understand I can lose money, and that paper mode is practice with no real funds.",
+    "I agree to a 20% fee on net profit each billing period, charged automatically to my card.",
+    "I understand my Kalshi account and funds stay mine — Outcome Engine never holds them."
+  ];
+
+  NOTIFS = [
+    { title: "v3 published", body: "Market-activity weight rose to 60%. Two of your open trades were rescored.", time: "9:12", tone: "blue", unread: true },
+    { title: "Trade resolved — win", body: "Budget resolution by Aug 1 settled YES. +$84.20 realized.", time: "8:40", tone: "green", unread: true },
+    { title: "Payment failed", body: "Your July invoice of $54.28 could not be charged. Grace period ends Sep 4.", time: "Aug 21", tone: "gold", unread: false },
+    { title: "Score alert — Fed September", body: "Crossed your 8.0 threshold. Now scoring 8.4 on the YES side.", time: "Aug 21", tone: "green", unread: false },
+    { title: "Kalshi key rotated", body: "You replaced your API key from a new device. Connection is healthy.", time: "Aug 19", tone: "muted", unread: false }
+  ];
+
+  ACTIVITY = [
+    { time: "09:41", event: "Trade", detail: "Took Fed rate cut — September · 200 contracts at 68\u00A2 · live", tone: "green" },
+    { time: "09:12", event: "Model", detail: "v3 published — your open trades were rescored", tone: "blue" },
+    { time: "08:55", event: "Billing", detail: "July invoice payment failed — grace period started", tone: "gold" },
+    { time: "08:20", event: "Trade", detail: "Oil above $80 resolved NO — loss, -$32.00", tone: "red" },
+    { time: "Aug 21", event: "Connection", detail: "Kalshi API key rotated from a new device", tone: "muted" }
+  ];
+
+  toneMap(t) {
+    return { green: { fg: "#149A6D", bg: "#E7F8F1" }, blue: { fg: "#1E4FB8", bg: "#E9F0FF" }, gold: { fg: "#8A5B0E", bg: "#FBF1DF" }, red: { fg: "#9A2E2A", bg: "#FBE9E8" }, muted: { fg: this.C.muted, bg: "#F1F3F5" } }[t];
+  }
+
+  toneDot(t) {
+    return { green: this.C.green, blue: this.C.blue, gold: this.C.gold, red: this.C.red, muted: "#C4CAD2" }[t];
+  }
+
+  componentDidMount() {
+    if (this.props.startOnboarding) this.setState({ screen: "onboarding", ob: 0 });
+    if (this.props.startInLive) this.setState({ mode: "live" });
+  }
+
+  renderVals() {
+    const s = this.state, C = this.C, live = s.mode === "live";
+    const go = k => () => this.setState({ screen: k });
+    const screens = [
+      ["onboarding", "Onboarding"], ["home", "Home"], ["desk", "Decision Desk"], ["detail", "Market detail"],
+      ["positions", "Positions"], ["performance", "Performance"], ["activity", "Activity"], ["billing", "Billing"], ["notifications", "Notifications"]
+    ];
+    const titles = { home: "Home", desk: "Decision Desk", detail: "Market", positions: "Positions", performance: "Performance", activity: "Activity", billing: "Billing", notifications: "Notifications" };
+
+    const sel = this.mkt(this.MARKETS.find(m => m.id === s.selId) || this.MARKETS[0]);
+    const cost = s.contracts * sel.price;
+    const profit = s.contracts * 1 - cost;
+    const fee = live ? profit * 0.2 : 0;
+    const overBalance = live && cost > this.BAL;
+
+    const perfSets = {
+      Today: { vals: [0, 1, 0.5, 2, 1.5, 3, 2.6, 4], pnl: "+$41.80", winRate: "67%", dd: "-2%", trades: "3" },
+      "7D": { vals: [0, 2, 1, 3, 2.5, 5, 4, 6, 5.5, 7], pnl: "+$96.40", winRate: "58%", dd: "-5%", trades: "7" },
+      "30D": { vals: [2, 4, 3, 6, 5, 8, 7, 9, 8, 11, 9, 12, 10, 13, 12, 15, 13, 14, 12, 15], pnl: "+$271.40", winRate: "61%", dd: "-8%", trades: "19" },
+      All: { vals: [0, 1, 3, 2, 5, 4, 7, 9, 8, 12, 10, 14, 13, 17, 15, 19, 18, 22, 21, 26], pnl: "+$614.90", winRate: "59%", dd: "-12%", trades: "48" }
+    };
+    const ps = perfSets[s.range];
+    const c = this.curve(ps.vals, 320, 108);
+
+    const modeOn = s.screen === "desk" || s.screen === "detail" || s.screen === "positions";
+
+    return {
+      isOnboarding: s.screen === "onboarding",
+      isApp: s.screen !== "onboarding",
+      isHome: s.screen === "home", isDesk: s.screen === "desk", isDetail: s.screen === "detail",
+      isPositions: s.screen === "positions", isPerf: s.screen === "performance",
+      isActivity: s.screen === "activity", isBilling: s.screen === "billing", isNotif: s.screen === "notifications",
+      screenTitle: titles[s.screen] || "Outcome Engine",
+      statusBg: s.screen === "onboarding" ? "#FFFFFF" : "#F1F3F5",
+      statusFg: C.text,
+      bellFg: C.muted,
+      modePill: live
+        ? { label: "LIVE", bg: "#E7F8F1", fg: "#0F7A56", border: "#8FDCBE" }
+        : { label: "PAPER", bg: "#EDEFF2", fg: C.muted, border: "#C6CCD4" },
+
+      railItems: screens.map(([k, label]) => ({
+        label, go: go(k),
+        bg: s.screen === k ? "#fff" : "transparent",
+        fg: s.screen === k ? C.text : "#69707C",
+        dot: s.screen === k ? C.green : "#C4CAD2"
+      })),
+
+      tabs: [["home", "Home", "8px"], ["desk", "Desk", "99px"], ["positions", "Positions", "4px"], ["performance", "Perf", "99px 99px 4px 4px"], ["activity", "Activity", "3px"]].map(([k, label, radius]) => {
+        const on = s.screen === k || (k === "desk" && s.screen === "detail");
+        return { label, radius, go: go(k), color: on ? C.greenDark : "#AAB1BA", fill: on ? "#E7F8F1" : "transparent" };
+      }),
+
+      periodPnl: "+$271.40", feeAccruing: "$54.28", billDate: "Sep 1", balance: "$1,284.60",
+      modelVersion: s.ver,
+      homeStats: [
+        { label: "open exposure", value: "$680", rule: "transparent" },
+        { label: "positions", value: "3", rule: "#EDEFF2" },
+        { label: "largest", value: "29%", rule: "#EDEFF2" }
+      ],
+      posStats: [
+        { label: "total open", value: "$680", rule: "transparent" },
+        { label: "positions", value: "3", rule: "#EDEFF2" },
+        { label: "largest", value: "29%", rule: "#EDEFF2" }
+      ],
+      topPicks: this.MARKETS.slice(0, 2).map(m => this.mkt(m)),
+      homeActivity: this.ACTIVITY.slice(0, 3).map((a, i) => ({ ...a, color: this.toneDot(a.tone), rule: i ? "#EDEFF2" : "transparent" })),
+
+      goDesk: go("desk"), goBilling: go("billing"), goNotif: go("notifications"),
+      setPaper: () => this.setState({ mode: "paper" }), setLive: () => this.setState({ mode: "live" }),
+      isPaper: !live, isLive: live,
+      paperTab: !live ? { bg: "#fff", fg: C.text, shadow: "0 1px 3px rgba(0,0,0,.09)" } : { bg: "transparent", fg: C.faint, shadow: "none" },
+      liveTab: live ? { bg: "#fff", fg: "#0F7A56", shadow: "0 1px 3px rgba(0,0,0,.09)" } : { bg: "transparent", fg: C.faint, shadow: "none" },
+      strongChip: this.chip(s.strong), allChip: this.chip(!s.strong),
+      setStrong: () => this.setState({ strong: true }), setAll: () => this.setState({ strong: false }),
+      deskMarkets: this.MARKETS.filter(m => !s.strong || m.score >= 7).map(m => this.mkt(m)),
+      deskCount: (s.strong ? this.MARKETS.filter(m => m.score >= 7).length : this.MARKETS.length) + " scored markets",
+
+      sel, contracts: s.contracts, overBalance,
+      inc: () => this.setState(p => ({ contracts: p.contracts + this.stepFor(p.contracts) })),
+      dec: () => this.setState(p => ({ contracts: Math.max(10, p.contracts - this.stepFor(p.contracts - 1)) })),
+      quickSizes: [100, 500, 1000].map(n => ({
+        label: n.toLocaleString(),
+        go: () => this.setState({ contracts: n }),
+        ...this.chip(s.contracts === n)
+      })).concat([{
+        label: "Max",
+        go: () => this.setState({ contracts: Math.floor(this.BAL / sel.price / 10) * 10 }),
+        ...this.chip(false)
+      }]),
+      stake: { cost: this.money(cost), profit: "+" + this.money(profit), payout: this.money(s.contracts), fee: "-" + this.money(fee), keep: this.money(profit - fee) },
+      ctaBg: overBalance ? "#C4CAD2" : this.GRAD,
+      ctaOpacity: overBalance ? 0.7 : 1,
+      ctaLabel: live ? "Put in " + this.money(cost) : "Take this trade (paper)",
+
+      openPos: [
+        { market: "Fed rate cut — September", mode: "live", model: "v2", track: "68\u00A2 \u2192 74\u00A2", size: "200 contracts", pnl: "+$12.00" },
+        { market: "Government shutdown before Nov 1", mode: "live", model: "v3", track: "80\u00A2 \u2192 82\u00A2", size: "150 contracts", pnl: "+$3.00" },
+        { market: "October CPI above 3.0%", mode: "paper", model: "v3-draft", track: "41\u00A2 \u2192 39\u00A2", size: "100 contracts", pnl: "-$2.00" }
+      ].map(p => ({
+        ...p,
+        modeLabel: p.mode === "live" ? "LIVE" : "PAPER",
+        modeFg: p.mode === "live" ? "#0F7A56" : C.muted,
+        modeBg: p.mode === "live" ? "#E7F8F1" : "#F1F3F5",
+        modeBorder: p.mode === "live" ? "#8FDCBE" : "#C6CCD4",
+        modeStroke: p.mode === "live" ? "solid" : "dashed",
+        pnlColor: p.pnl.startsWith("-") ? C.red : C.greenDark
+      })),
+      resolvedPos: [
+        { market: "Budget resolution by Aug 1", win: true, pnl: "+$84.20" },
+        { market: "Oil closes above $80", win: false, pnl: "-$32.00" },
+        { market: "Fed rate cut — July", win: true, pnl: "+$51.50" }
+      ].map((r, i) => ({
+        ...r, mark: r.win ? "\u2191" : "\u2193",
+        color: r.win ? C.greenDark : C.red,
+        tint: r.win ? "#E7F8F1" : "#FBE9E8",
+        rule: i ? "#EDEFF2" : "transparent"
+      })),
+
+      range: s.range,
+      ranges: ["Today", "7D", "30D", "All"].map(r => ({ label: r, go: () => this.setState({ range: r }), ...this.chip(s.range === r) })),
+      perf: {
+        pnl: ps.pnl, winRate: ps.winRate, dd: ps.dd, trades: ps.trades, line: c.line, area: c.area,
+        cats: [
+          { label: "Economics", value: "+$210", width: "78%", color: C.green },
+          { label: "Politics", value: "+$74", width: "34%", color: C.green },
+          { label: "Weather", value: "+$18", width: "12%", color: C.green },
+          { label: "Commodities", value: "-$31", width: "18%", color: C.red }
+        ]
+      },
+
+      actChips: ["All", "Trade", "Model", "Billing", "Connection"].map(t => ({ label: t, go: () => this.setState({ act: t }), ...this.chip(s.act === t) })),
+      activityRows: this.ACTIVITY.filter(a => s.act === "All" || a.event === s.act).map((a, i) => ({ ...a, ...this.toneMap(a.tone), rule: i ? "#EDEFF2" : "transparent" })),
+
+      invoices: [
+        { month: "July 2026", amount: "$54.28", net: "+$271.40", status: "failed", tone: "red" },
+        { month: "June 2026", amount: "$38.10", net: "+$190.50", status: "paid", tone: "green" },
+        { month: "May 2026", amount: "$0.00", net: "-$62.00", status: "no fee", tone: "muted" },
+        { month: "April 2026", amount: "$21.60", net: "+$108.00", status: "paid", tone: "green" }
+      ].map((i, ix) => ({ ...i, ...this.toneMap(i.tone), rule: ix ? "#EDEFF2" : "transparent" })),
+
+      notifs: this.NOTIFS.map(n => ({
+        ...n, dot: n.unread ? this.toneDot(n.tone) : "#DDE1E6",
+        cardBg: n.unread ? "#fff" : "#FAFBFC",
+        cardBorder: n.unread ? C.border : "#EAEDF0"
+      })),
+      versions: [
+        { key: "v3", label: "v3 · current", note: "Published today" },
+        { key: "v2", label: "v2 · previous", note: "Retires Sep 6" }
+      ].map(v => ({
+        ...v, go: () => this.setState({ ver: v.key }),
+        border: s.ver === v.key ? C.green : C.border,
+        bg: s.ver === v.key ? "#F3FBF7" : "#fff",
+        fg: s.ver === v.key ? "#0F7A56" : C.body
+      })),
+
+      ob: this.OB[s.ob],
+      obCount: s.ob + 1 + " / 7",
+      obBars: this.OB.map((_, i) => ({ bg: i <= s.ob ? C.green : "#E3E6EA" })),
+      obNext: () => (s.ob < 6 ? this.setState({ ob: s.ob + 1 }) : this.setState({ screen: "home", ob: 0 })),
+      obBack: () => (s.ob > 0 ? this.setState({ ob: s.ob - 1 }) : this.setState({ screen: "home" })),
+      obCtaBg: s.ob === 3 && !s.agreed.every(Boolean) ? "#C4CAD2" : this.GRAD,
+      obCtaOpacity: s.ob === 3 && !s.agreed.every(Boolean) ? 0.7 : 1,
+      inviteChars: "8FK2QD".split("").map((v, i) => ({ v, border: i < 6 ? "#C9CFD6" : C.border })),
+      explainer: this.EXPLAINER,
+      agreements: this.AGREE.map((text, i) => {
+        const on = !!s.agreed[i];
+        return {
+          text, rule: i < this.AGREE.length - 1 ? "#EDEFF2" : "transparent",
+          check: on ? "\u2713" : "",
+          boxBg: on ? C.green : "#fff",
+          boxBorder: on ? C.green : "#C9CFD6",
+          toggle: () => this.setState(p => {
+            const a = [...p.agreed]; a[i] = !a[i]; return { agreed: a };
+          })
+        };
+      }),
+      agreeHint: s.agreed.every(Boolean) ? "All set" : "Tap each statement to continue",
+      kalshiSteps: [
+        { n: "1", text: "Open Kalshi → Settings → API keys and create a new key." },
+        { n: "2", text: "Copy the key. Kalshi shows it once." },
+        { n: "3", text: "Paste it below. We encrypt it and pull your profile." }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

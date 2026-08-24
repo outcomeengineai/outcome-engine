@@ -1,0 +1,30 @@
+{
+  "name": "@outcome/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run bundle:deno && npm run bundle:types",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/",
+    "bundle:deno": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=../../supabase/functions/_shared/outcome-shared.mjs --banner:js=\"/// <reference types=\\\"./outcome-shared.d.mts\\\" /> // GENERATED from packages/shared/src — do not edit. Rebuild: npm run build -w @outcome/shared\"",
+    "bundle:types": "dts-bundle-generator -o ../../supabase/functions/_shared/outcome-shared.d.mts --no-banner --no-check --export-referenced-types=false src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "dts-bundle-generator": "^9.5.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.6.3"
+  }
+}

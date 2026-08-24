@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#DFE3E7;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#149A6D;text-decoration:none}a:hover{color:#1FBE87}
+*{box-sizing:border-box}
+input,button{font-family:inherit}
+.oe-s::-webkit-scrollbar{width:0}
+input[type=range]{-webkit-appearance:none;height:4px;border-radius:999px;background:#E3E6EA;width:100%}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:999px;background:currentColor;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+</style>
+</helmet>
+<div style="padding:44px 44px 90px;display:flex;flex-direction:column;gap:26px;align-items:flex-start">
+
+<div style="display:flex;align-items:flex-end;justify-content:space-between;width:1440px;gap:40px">
+<div>
+<div style="font:700 16px/1.2 Inter,sans-serif;letter-spacing:-.01em;color:#161B22">Outcome <span style="color:#1FBE87">Engine</span> — Admin</div>
+<div style="font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:#8A9199;margin-top:6px">Desktop web · 1440 × 900 · two admins</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:#8A9199">Nav shell</span>
+<div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:rgba(22,27,34,.07)">
+<sc-for list="{{ shells }}" as="sh" hint-placeholder-count="3">
+<button onClick="{{ sh.go }}" style="padding:7px 13px;border:none;border-radius:8px;cursor:pointer;font:600 12px Inter,sans-serif;background:{{ sh.bg }};color:{{ sh.fg }};box-shadow:{{ sh.shadow }}">{{ sh.label }}</button>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="width:1440px;height:900px;border-radius:14px;overflow:hidden;background:#F1F3F5;display:flex;flex-direction:{{ shellDir }};box-shadow:0 24px 60px -20px rgba(22,27,34,.32),0 0 0 1px rgba(22,27,34,.1)">
+
+<sc-if value="{{ hasSidebar }}" hint-placeholder-val="{{ true }}">
+<div style="width:{{ sidebarW }};flex:none;background:#141A21;display:flex;flex-direction:column;padding:20px 0 16px">
+<div style="padding:0 18px 20px;display:flex;align-items:center;gap:10px">
+<span style="width:26px;height:26px;border-radius:8px;background:linear-gradient(140deg,#3E7BFA,#1FBE87);flex:none"></span>
+<sc-if value="{{ sidebarWide }}" hint-placeholder-val="{{ true }}">
+<span style="font:700 14px/1 Inter,sans-serif;letter-spacing:-.01em;color:#fff">Outcome <span style="color:#1FBE87">Engine</span></span>
+</sc-if>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:2px;padding:0 10px;overflow-y:auto" class="oe-s">
+<sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="3">
+<div style="margin-top:{{ g.top }}">
+<sc-if value="{{ g.showLabel }}" hint-placeholder-val="{{ true }}">
+<div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5C6773;padding:12px 9px 8px">{{ g.label }}</div>
+</sc-if>
+<sc-for list="{{ g.items }}" as="n" hint-placeholder-count="4">
+<button onClick="{{ n.go }}" title="{{ n.label }}" style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:9px 9px;border:none;border-radius:9px;cursor:pointer;background:{{ n.bg }};font:500 13px/1.3 Inter,sans-serif;color:{{ n.fg }};justify-content:{{ n.justify }}" style-hover="background:rgba(255,255,255,.07)">
+<span style="width:16px;height:16px;flex:none;border-radius:{{ n.radius }};border:1.7px solid {{ n.mark }};background:{{ n.fill }}"></span>
+<sc-if value="{{ sidebarWide }}" hint-placeholder-val="{{ true }}">
+<span style="flex:1">{{ n.label }}</span>
+</sc-if>
+<sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}">
+<span style="width:6px;height:6px;border-radius:99px;background:{{ n.badge }};flex:none"></span>
+</sc-if>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="padding:14px 12px 0;margin:8px 10px 0;border-top:1px solid rgba(255,255,255,.09)">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="width:26px;height:26px;border-radius:99px;background:linear-gradient(140deg,#3E7BFA,#1FBE87);flex:none;opacity:.9"></span>
+<sc-if value="{{ sidebarWide }}" hint-placeholder-val="{{ true }}">
+<div>
+<div style="font:500 12px/1 Inter,sans-serif;color:#E4E8ED">You</div>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;color:#5C6773;margin-top:5px">Admin</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isTopShell }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;background:#141A21;padding:0 24px;display:flex;align-items:center;gap:26px;height:60px">
+<div style="display:flex;align-items:center;gap:10px;flex:none">
+<span style="width:24px;height:24px;border-radius:7px;background:linear-gradient(140deg,#3E7BFA,#1FBE87)"></span>
+<span style="font:700 13.5px/1 Inter,sans-serif;color:#fff">Outcome <span style="color:#1FBE87">Engine</span></span>
+</div>
+<div style="flex:1;display:flex;gap:2px;overflow-x:auto" class="oe-s">
+<sc-for list="{{ navFlat }}" as="n" hint-placeholder-count="9">
+<button onClick="{{ n.go }}" style="display:flex;align-items:center;gap:7px;padding:7px 11px;border:none;border-radius:8px;cursor:pointer;background:{{ n.bg }};font:500 12.5px/1.3 Inter,sans-serif;color:{{ n.fg }};white-space:nowrap" style-hover="background:rgba(255,255,255,.07)">
+{{ n.label }}
+<sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}">
+<span style="width:5px;height:5px;border-radius:99px;background:{{ n.badge }}"></span>
+</sc-if>
+</button>
+</sc-for>
+</div>
+<span style="width:28px;height:28px;border-radius:99px;background:linear-gradient(140deg,#3E7BFA,#1FBE87);flex:none;opacity:.9"></span>
+</div>
+</sc-if>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+<div style="flex:none;background:#fff;border-bottom:1px solid #E3E6EA;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;gap:24px">
+<div>
+<h1 style="font:600 19px/1.2 Inter,sans-serif;letter-spacing:-.015em;color:#161B22;margin:0">{{ pageTitle }}</h1>
+<div style="font:400 12.5px/1.4 Inter,sans-serif;color:#8A9199;margin-top:5px">{{ pageSub }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:20px">
+<div style="display:flex;align-items:center;gap:18px;padding-right:20px;border-right:1px solid #E9ECEF">
+<sc-for list="{{ headerStats }}" as="h" hint-placeholder-count="3">
+<div style="text-align:right">
+<div style="font:500 14px/1 'JetBrains Mono',monospace;color:{{ h.color }}">{{ h.value }}</div>
+<div style="font:400 10px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">{{ h.label }}</div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:99px;background:{{ riskPill.bg }};border:1px solid {{ riskPill.border }}">
+<span style="width:6px;height:6px;border-radius:99px;background:{{ riskPill.dot }}"></span>
+<span style="font:600 11.5px/1 Inter,sans-serif;color:{{ riskPill.fg }}">{{ riskPill.label }}</span>
+</div>
+</div>
+</div>
+
+<div class="oe-s" style="flex:1;overflow-y:auto;padding:24px 28px 40px">
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:16px">
+<div style="border-radius:16px;padding:22px;background:linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%);color:#fff">
+<div style="font:500 11px/1 Inter,sans-serif;opacity:.85">Platform net PnL · 30 days</div>
+<div style="font:600 40px/1 'JetBrains Mono',monospace;letter-spacing:-.02em;margin-top:14px">+$3,842</div>
+<div style="display:flex;gap:28px;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.24)">
+<div><div style="font:500 16px/1 'JetBrains Mono',monospace">$768</div><div style="font:400 10.5px/1 Inter,sans-serif;opacity:.85;margin-top:6px">fees pending</div></div>
+<div><div style="font:500 16px/1 'JetBrains Mono',monospace">$14,210</div><div style="font:400 10.5px/1 Inter,sans-serif;opacity:.85;margin-top:6px">open exposure</div></div>
+<div><div style="font:500 16px/1 'JetBrains Mono',monospace">17 / 20</div><div style="font:400 10.5px/1 Inter,sans-serif;opacity:.85;margin-top:6px">active members</div></div>
+</div>
+</div>
+<sc-for list="{{ homeCards }}" as="k" hint-placeholder-count="2">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="font:600 12.5px/1 Inter,sans-serif;color:#161B22">{{ k.title }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:5px;color:{{ k.fg }};background:{{ k.bg }}">{{ k.status }}</span>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:11px;margin-top:16px">
+<sc-for list="{{ k.rows }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<span style="font:400 12px Inter,sans-serif;color:#69707C">{{ r.label }}</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:{{ r.color }}">{{ r.value }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Needs attention</span>
+<span style="font:400 11.5px Inter,sans-serif;color:#9AA1AC">4 items</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:9px">
+<sc-for list="{{ pending }}" as="p" hint-placeholder-count="4">
+<button onClick="{{ p.go }}" style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:{{ p.bg }};border:1px solid {{ p.border }};border-radius:12px;padding:12px 13px;cursor:pointer" style-hover="border-color:#C9CFD6">
+<span style="width:7px;height:7px;border-radius:99px;flex:none;background:{{ p.dot }}"></span>
+<div style="flex:1">
+<div style="font:500 12.5px/1.3 Inter,sans-serif;color:#161B22">{{ p.title }}</div>
+<div style="font:400 11.5px/1.4 Inter,sans-serif;color:#69707C;margin-top:4px">{{ p.body }}</div>
+</div>
+<span style="font:500 11px 'JetBrains Mono',monospace;color:#9AA1AC;flex:none">{{ p.action }} →</span>
+</button>
+</sc-for>
+</div>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Platform equity · 30 days</span>
+<span style="font:500 11px 'JetBrains Mono',monospace;color:#149A6D">v3 published today</span>
+</div>
+<svg viewBox="0 0 620 168" width="100%" height="168" style="display:block;overflow:visible">
+<defs><linearGradient id="oeAdmEq" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1FBE87" stop-opacity=".26"></stop><stop offset="100%" stop-color="#1FBE87" stop-opacity="0"></stop></linearGradient></defs>
+<line x1="0" y1="42" x2="620" y2="42" stroke="#EDEFF2" stroke-width="1"></line>
+<line x1="0" y1="105" x2="620" y2="105" stroke="#EDEFF2" stroke-width="1"></line>
+<path d="{{ homeCurve.area }}" fill="url(#oeAdmEq)"></path>
+<path d="{{ homeCurve.line }}" fill="none" stroke="#1FBE87" stroke-width="2" stroke-linejoin="round"></path>
+</svg>
+<div style="display:flex;justify-content:space-between;font:400 10.5px 'JetBrains Mono',monospace;color:#9AA1AC;margin-top:8px">
+<span>Jul 24</span><span>Aug 8</span><span>Aug 23</span>
+</div>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<div style="padding:16px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #EDEFF2">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Recent platform activity</span>
+<button onClick="{{ goActivity }}" style="border:none;background:none;cursor:pointer;font:600 12px Inter,sans-serif;color:#149A6D">Full log →</button>
+</div>
+<sc-for list="{{ activityRows }}" as="a" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:16px;padding:12px 18px;border-top:1px solid {{ a.rule }}">
+<span style="font:400 11px 'JetBrains Mono',monospace;color:#9AA1AC;width:64px;flex:none">{{ a.time }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.07em;text-transform:uppercase;padding:4px 7px;border-radius:5px;color:{{ a.fg }};background:{{ a.bg }};width:104px;flex:none;text-align:center">{{ a.event }}</span>
+<span style="font:500 12px Inter,sans-serif;color:#161B22;width:96px;flex:none">{{ a.user }}</span>
+<span style="flex:1;font:400 12.5px Inter,sans-serif;color:#69707C">{{ a.detail }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isStrategy }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:#E7EAEE;width:fit-content">
+<sc-for list="{{ stratTabs }}" as="t" hint-placeholder-count="2">
+<button onClick="{{ t.go }}" style="display:flex;align-items:center;gap:8px;padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font:600 12.5px Inter,sans-serif;background:{{ t.bg }};color:{{ t.fg }};box-shadow:{{ t.shadow }}">
+{{ t.label }}
+<sc-if value="{{ t.hasBadge }}" hint-placeholder-val="{{ false }}">
+<span style="width:6px;height:6px;border-radius:99px;background:#DE9F35"></span>
+</sc-if>
+</button>
+</sc-for>
+</div>
+
+<sc-if value="{{ isConfigure }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:236px 1fr;gap:20px;align-items:start">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:8px">
+<sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+<button onClick="{{ st.go }}" style="display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;padding:12px;border:none;border-radius:11px;cursor:pointer;background:{{ st.bg }}" style-hover="background:#F7F8FA">
+<span style="width:20px;height:20px;border-radius:99px;flex:none;font:600 10.5px 'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center;color:{{ st.numFg }};background:{{ st.numBg }};border:1.5px solid {{ st.numBorder }}">{{ st.mark }}</span>
+<div>
+<div style="font:600 12.5px/1.3 Inter,sans-serif;color:{{ st.fg }}">{{ st.label }}</div>
+<div style="font:400 11px/1.4 Inter,sans-serif;color:#9AA1AC;margin-top:4px">{{ st.hint }}</div>
+</div>
+</button>
+</sc-for>
+<div style="padding:12px;border-top:1px solid #EDEFF2;margin-top:6px">
+<div style="font:400 11px/1.5 Inter,sans-serif;color:#9AA1AC">Editing draft <span style="font-family:'JetBrains Mono',monospace;color:#69707C">v3-draft</span>. Live is v3.</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:16px">
+<sc-if value="{{ step0 }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:22px">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:18px">
+<div>
+<div style="font:600 14.5px Inter,sans-serif;color:#161B22">Signal weights</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:5px;max-width:520px;text-wrap:pretty">How much each signal moves a market's score. Set the platform default, then override only the categories that behave differently.</div>
+</div>
+<div style="text-align:right;flex:none">
+<div style="font:600 20px/1 'JetBrains Mono',monospace;color:{{ weightTotalColor }}">{{ weightTotal }}%</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">allocated</div>
+</div>
+</div>
+<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px">
+<sc-for list="{{ catChips }}" as="c" hint-placeholder-count="4">
+<button onClick="{{ c.go }}" style="display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:99px;cursor:pointer;font:600 12px Inter,sans-serif;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }}">
+{{ c.label }}
+<sc-if value="{{ c.override }}" hint-placeholder-val="{{ false }}">
+<span style="width:5px;height:5px;border-radius:99px;background:#DE9F35"></span>
+</sc-if>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{ showDefaultNotice }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;background:#F7F8FA;border:1px solid #E9ECEF;border-radius:12px;padding:13px 15px;margin-bottom:20px">
+<span style="font:400 12.5px Inter,sans-serif;color:#69707C">{{ defaultNotice }}</span>
+<button onClick="{{ enableOverride }}" style="border:1px solid #B9EBD6;background:#E7F8F1;color:#0F7A56;border-radius:9px;padding:7px 13px;font:600 12px Inter,sans-serif;cursor:pointer;flex:none">Customize</button>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:20px">
+<sc-for list="{{ weights }}" as="w" hint-placeholder-count="3">
+<div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="width:7px;height:7px;border-radius:99px;background:{{ w.color }}"></span>
+<span style="font:500 13px Inter,sans-serif;color:#161B22">{{ w.label }}</span>
+<span style="font:400 11.5px Inter,sans-serif;color:#9AA1AC">{{ w.note }}</span>
+</div>
+<span style="font:600 14px 'JetBrains Mono',monospace;color:{{ w.color }}">{{ w.value }}%</span>
+</div>
+<input type="range" min="0" max="100" value="{{ w.value }}" onChange="{{ w.set }}" style="color:{{ w.color }}">
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ isOverridden }}" hint-placeholder-val="{{ false }}">
+<button onClick="{{ clearOverride }}" style="margin-top:20px;border:1px solid #E3E6EA;background:none;border-radius:9px;padding:8px 13px;font:600 12px Inter,sans-serif;color:#69707C;cursor:pointer">Revert {{ activeCat }} to platform default</button>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ step1 }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:22px">
+<div style="font:600 14.5px Inter,sans-serif;color:#161B22">Score thresholds</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:5px;margin-bottom:22px">Which scores surface as strong picks, and which conditions get tagged automatically.</div>
+<div style="display:flex;gap:28px;align-items:center;margin-bottom:26px">
+<div style="flex:1">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">
+<span style="font:500 13px Inter,sans-serif;color:#161B22">Strong-pick threshold</span>
+<span style="font:600 14px 'JetBrains Mono',monospace;color:#149A6D">{{ threshold }}+</span>
+</div>
+<input type="range" min="1" max="10" step="0.5" value="{{ threshold }}" onChange="{{ setThreshold }}" style="color:#1FBE87">
+<div style="display:flex;justify-content:space-between;font:400 10.5px 'JetBrains Mono',monospace;color:#9AA1AC;margin-top:9px"><span>1</span><span>5</span><span>10</span></div>
+</div>
+<div style="width:210px;flex:none;background:#F7F8FA;border:1px solid #E9ECEF;border-radius:12px;padding:14px">
+<div style="font:600 20px/1 'JetBrains Mono',monospace;color:#161B22">{{ thresholdHit }}</div>
+<div style="font:400 11.5px/1.45 Inter,sans-serif;color:#69707C;margin-top:7px">markets would have qualified over the last 30 days</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ autoTags }}" as="t" hint-placeholder-count="3">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid #EDEFF2">
+<div>
+<div style="font:500 13px Inter,sans-serif;color:#161B22">{{ t.label }}</div>
+<div style="font:400 11.5px/1.4 Inter,sans-serif;color:#9AA1AC;margin-top:4px">{{ t.hint }}</div>
+</div>
+<button onClick="{{ t.toggle }}" style="width:42px;height:24px;border-radius:99px;border:none;cursor:pointer;background:{{ t.trackBg }};padding:3px;display:flex;justify-content:{{ t.justify }}">
+<span style="width:18px;height:18px;border-radius:99px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);display:block"></span>
+</button>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ step2 }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:22px">
+<div style="font:600 14.5px Inter,sans-serif;color:#161B22">Risk limits</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:5px;margin-bottom:20px">Applied per member. Hitting a limit stops new trades for the rest of the day; open positions are untouched.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+<sc-for list="{{ riskFields }}" as="r" hint-placeholder-count="3">
+<div style="border:1px solid #E9ECEF;border-radius:13px;padding:16px;background:#FAFBFC">
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC">{{ r.label }}</div>
+<div style="display:flex;align-items:baseline;gap:5px;margin-top:12px">
+<span style="font:600 26px/1 'JetBrains Mono',monospace;color:#161B22">{{ r.value }}</span>
+<span style="font:400 13px 'JetBrains Mono',monospace;color:#9AA1AC">{{ r.unit }}</span>
+</div>
+<div style="display:flex;gap:6px;margin-top:14px">
+<button onClick="{{ r.dec }}" style="flex:1;border:1px solid #E3E6EA;background:#fff;border-radius:8px;padding:6px;font:400 15px/1 Inter,sans-serif;color:#69707C;cursor:pointer">−</button>
+<button onClick="{{ r.inc }}" style="flex:1;border:1px solid #E3E6EA;background:#fff;border-radius:8px;padding:6px;font:400 15px/1 Inter,sans-serif;color:#69707C;cursor:pointer">+</button>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ step3 }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:22px">
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+<div>
+<div style="font:600 14.5px Inter,sans-serif;color:#161B22">Review v3-draft</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:5px">Publishing rescores every open market and notifies affected members.</div>
+</div>
+<span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.09em;padding:6px 9px;border-radius:6px;background:#FBF1DF;color:#8A5B0E">DRAFT</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 32px;margin-top:20px">
+<sc-for list="{{ reviewRows }}" as="r" hint-placeholder-count="6">
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-top:1px solid #EDEFF2">
+<span style="font:400 12.5px Inter,sans-serif;color:#69707C">{{ r.label }}</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:{{ r.color }}">{{ r.value }}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:10px;margin-top:22px">
+<button onClick="{{ goSim }}" style="padding:12px 18px;border:1px solid #E3E6EA;background:#fff;border-radius:11px;font:600 13px Inter,sans-serif;color:#3F4652;cursor:pointer">Preview vs. last 30 days</button>
+<button style="padding:12px 22px;border:none;border-radius:11px;font:600 13px Inter,sans-serif;color:#fff;cursor:pointer;background:linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%)">Publish as v4</button>
+</div>
+</div>
+</sc-if>
+
+<div style="display:flex;gap:10px">
+<button onClick="{{ prevStep }}" style="padding:11px 18px;border:1px solid #E3E6EA;background:#fff;border-radius:11px;font:600 13px Inter,sans-serif;color:#69707C;cursor:pointer">Back</button>
+<button onClick="{{ nextStep }}" style="padding:11px 18px;border:1px solid #E3E6EA;background:#fff;border-radius:11px;font:600 13px Inter,sans-serif;color:#161B22;cursor:pointer">{{ nextLabel }}</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isHealth }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ signals }}" as="sg" hint-placeholder-count="3">
+<div style="background:#fff;border:1px solid {{ sg.cardBorder }};border-radius:16px;padding:20px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+<span style="width:8px;height:8px;border-radius:99px;background:{{ sg.color }}"></span>
+<span style="font:600 14px Inter,sans-serif;color:#161B22">{{ sg.label }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:5px;color:{{ sg.fg }};background:{{ sg.bg }}">{{ sg.status }}</span>
+<span style="flex:1"></span>
+<span style="font:400 11.5px Inter,sans-serif;color:#9AA1AC">last {{ sg.sample }} resolved trades</span>
+</div>
+<div style="display:flex;gap:26px;align-items:center">
+<div style="width:118px;flex:none">
+<div style="font:600 30px/1 'JetBrains Mono',monospace;color:#161B22">{{ sg.winRate }}%</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:8px">rolling win rate</div>
+</div>
+<div style="flex:1">
+<svg viewBox="0 0 420 62" width="100%" height="62" style="display:block;overflow:visible">
+<line x1="0" y1="{{ sg.minY }}" x2="420" y2="{{ sg.minY }}" stroke="#DDE1E6" stroke-width="1" stroke-dasharray="3 3"></line>
+<path d="{{ sg.line }}" fill="none" stroke="{{ sg.trendColor }}" stroke-width="2" stroke-linejoin="round"></path>
+</svg>
+<div style="font:400 10px/1 'JetBrains Mono',monospace;color:#B4BAC2;margin-top:4px">— min win rate {{ minWinRate }}%</div>
+</div>
+</div>
+<sc-if value="{{ sg.hasNote }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:10px;align-items:center;margin-top:16px;padding:12px 14px;border-radius:11px;background:{{ sg.noteBg }}">
+<span style="width:5px;height:5px;border-radius:99px;background:{{ sg.color }};flex:none"></span>
+<span style="font:400 12.5px/1.45 Inter,sans-serif;color:{{ sg.fg }}">{{ sg.note }}</span>
+<span style="flex:1"></span>
+<sc-if value="{{ sg.hasAction }}" hint-placeholder-val="{{ false }}">
+<button style="border:1px solid {{ sg.color }};background:none;border-radius:8px;padding:6px 11px;font:600 11.5px Inter,sans-serif;color:{{ sg.fg }};cursor:pointer;flex:none">{{ sg.action }}</button>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:20px">
+<div style="font:600 13px Inter,sans-serif;color:#161B22">Auto-disable rules</div>
+<div style="font:400 11.5px/1.5 Inter,sans-serif;color:#9AA1AC;margin-top:6px;margin-bottom:6px">A signal that trips any of these is pulled out of scoring until its cooldown ends.</div>
+<sc-for list="{{ autoRules }}" as="r" hint-placeholder-count="6">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-top:1px solid #EDEFF2">
+<span style="font:400 12.5px/1.35 Inter,sans-serif;color:#69707C;padding-right:12px">{{ r.label }}</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#161B22;flex:none">{{ r.value }}</span>
+</div>
+</sc-for>
+<div style="margin-top:16px;padding:13px;border-radius:11px;background:#F7F8FA;font:400 11.5px/1.5 Inter,sans-serif;color:#69707C">Auto-adjusting weights are planned: the system will propose a retune and wait for your approval.</div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSim }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:20px">
+<div style="font:600 13.5px Inter,sans-serif;color:#161B22;margin-bottom:16px">Backtest inputs</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div>
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC;margin-bottom:8px">Strategy version</div>
+<div style="display:flex;gap:6px">
+<sc-for list="{{ simVersions }}" as="v" hint-placeholder-count="2">
+<button onClick="{{ v.go }}" style="flex:1;padding:9px;border-radius:10px;cursor:pointer;font:600 12px 'JetBrains Mono',monospace;border:1.5px solid {{ v.border }};background:{{ v.bg }};color:{{ v.fg }}">{{ v.label }}</button>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font:400 11.5px/1 Inter,sans-serif;color:#9AA1AC;margin-bottom:8px">Date range</div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<sc-for list="{{ simRanges }}" as="r" hint-placeholder-count="3">
+<button onClick="{{ r.go }}" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font:500 12.5px Inter,sans-serif;border:1px solid {{ r.border }};background:{{ r.bg }};color:{{ r.fg }}">{{ r.label }}</button>
+</sc-for>
+</div>
+</div>
+<button onClick="{{ runSim }}" style="margin-top:4px;padding:12px;border:none;border-radius:11px;font:600 13px Inter,sans-serif;color:#fff;cursor:pointer;background:linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%)">{{ simCta }}</button>
+<div style="font:400 11px/1.5 Inter,sans-serif;color:#9AA1AC">Replays the draft's weights against resolved markets in the window. No trades are placed.</div>
+</div>
+</div>
+
+<sc-if value="{{ simRan }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+<sc-for list="{{ simStats }}" as="st" hint-placeholder-count="4">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:14px;padding:16px">
+<div style="font:600 22px/1 'JetBrains Mono',monospace;color:{{ st.color }}">{{ st.value }}</div>
+<div style="font:400 11px/1.3 Inter,sans-serif;color:#9AA1AC;margin-top:9px">{{ st.label }}</div>
+<div style="font:400 11px/1.3 'JetBrains Mono',monospace;color:{{ st.deltaColor }};margin-top:6px">{{ st.delta }}</div>
+</div>
+</sc-for>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:20px">
+<div style="display:flex;align-items:center;gap:20px;margin-bottom:14px">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Equity curve</span>
+<span style="display:flex;align-items:center;gap:7px;font:400 11.5px Inter,sans-serif;color:#69707C"><span style="width:14px;height:2px;background:#9AA1AC"></span>Live v3</span>
+<span style="display:flex;align-items:center;gap:7px;font:400 11.5px Inter,sans-serif;color:#69707C"><span style="width:14px;height:2px;background:#1FBE87"></span>Simulated v3-draft</span>
+</div>
+<svg viewBox="0 0 700 220" width="100%" height="220" style="display:block;overflow:visible">
+<defs><linearGradient id="oeSim" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1FBE87" stop-opacity=".22"></stop><stop offset="100%" stop-color="#1FBE87" stop-opacity="0"></stop></linearGradient></defs>
+<line x1="0" y1="55" x2="700" y2="55" stroke="#EDEFF2"></line>
+<line x1="0" y1="110" x2="700" y2="110" stroke="#EDEFF2"></line>
+<line x1="0" y1="165" x2="700" y2="165" stroke="#EDEFF2"></line>
+<path d="{{ simDraftCurve.area }}" fill="url(#oeSim)"></path>
+<path d="{{ simLiveCurve.line }}" fill="none" stroke="#9AA1AC" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"></path>
+<path d="{{ simDraftCurve.line }}" fill="none" stroke="#1FBE87" stroke-width="2.4" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:18px">
+<div style="flex:1">
+<div style="font:600 13px Inter,sans-serif;color:#161B22">Promote v3-draft to live</div>
+<div style="font:400 12px/1.45 Inter,sans-serif;color:#69707C;margin-top:5px">Requires admin confirmation. Members get a notification and a two-week window to stay on v3.</div>
+</div>
+<button style="padding:11px 20px;border:1.5px solid #1FBE87;background:#E7F8F1;color:#0F7A56;border-radius:11px;font:600 13px Inter,sans-serif;cursor:pointer;flex:none">Promote to live</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ simIdle }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px dashed #D3D8DE;border-radius:16px;padding:70px 40px;text-align:center">
+<div style="font:600 14px Inter,sans-serif;color:#161B22">No run yet</div>
+<div style="font:400 12.5px/1.6 Inter,sans-serif;color:#9AA1AC;margin-top:8px;max-width:340px;margin-left:auto;margin-right:auto">Pick a version and a window, then run. Results overlay the live curve so you can see whether the draft actually beats what is running.</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="flex:1;background:#fff;border:1px solid #E3E6EA;border-radius:11px;padding:9px 13px;display:flex;gap:10px;align-items:center;max-width:320px">
+<span style="width:11px;height:11px;border-radius:99px;border:1.6px solid #9AA1AC;flex:none"></span>
+<input placeholder="Search members" style="border:none;outline:none;flex:1;font:400 12.5px Inter,sans-serif;color:#161B22;background:none">
+</div>
+<div style="display:flex;gap:6px">
+<sc-for list="{{ acctFilters }}" as="f" hint-placeholder-count="5">
+<button onClick="{{ f.go }}" style="padding:7px 13px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }}">{{ f.label }}</button>
+</sc-for>
+</div>
+<span style="flex:1"></span>
+<button style="padding:9px 16px;border:none;border-radius:10px;font:600 12.5px Inter,sans-serif;color:#fff;cursor:pointer;background:linear-gradient(100deg,#3E7BFA 0%,#1FBE87 100%)">Invite member</button>
+</div>
+
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<div style="display:flex;align-items:center;gap:14px;padding:11px 18px;background:#FAFBFC;border-bottom:1px solid #E9ECEF;font:500 10px 'JetBrains Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:#9AA1AC">
+<span style="width:190px;flex:none">Member</span>
+<span style="width:96px;flex:none">Status</span>
+<span style="width:104px;flex:none">Kalshi</span>
+<span style="width:74px;flex:none">Mode</span>
+<span style="width:96px;flex:none;text-align:right">Net PnL</span>
+<span style="width:66px;flex:none;text-align:right">Trades</span>
+<span style="width:92px;flex:none;text-align:right">Fee owed</span>
+<span style="flex:1;text-align:right">Billing</span>
+</div>
+<sc-for list="{{ accounts }}" as="u" hint-placeholder-count="7">
+<div style="display:flex;align-items:center;gap:14px;padding:13px 18px;border-top:1px solid {{ u.rule }};background:{{ u.rowBg }}">
+<div style="width:190px;flex:none;display:flex;align-items:center;gap:11px">
+<span style="width:28px;height:28px;border-radius:99px;flex:none;background:{{ u.avatar }}"></span>
+<div>
+<div style="font:500 13px/1 Inter,sans-serif;color:#161B22">{{ u.name }}</div>
+<div style="font:400 10.5px/1 'JetBrains Mono',monospace;color:#9AA1AC;margin-top:6px">{{ u.role }}</div>
+</div>
+</div>
+<span style="width:96px;flex:none;font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:{{ u.statusFg }};background:{{ u.statusBg }};padding:5px 7px;border-radius:5px;text-align:center">{{ u.status }}</span>
+<div style="width:104px;flex:none;display:flex;align-items:center;gap:7px">
+<span style="width:6px;height:6px;border-radius:99px;background:{{ u.kalshiDot }}"></span>
+<span style="font:400 11.5px Inter,sans-serif;color:#69707C">{{ u.kalshi }}</span>
+</div>
+<span style="width:74px;flex:none;font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:{{ u.modeFg }};background:{{ u.modeBg }};padding:5px 7px;border-radius:5px;text-align:center">{{ u.mode }}</span>
+<span style="width:96px;flex:none;text-align:right;font:500 13px 'JetBrains Mono',monospace;color:{{ u.pnlColor }}">{{ u.pnl }}</span>
+<span style="width:66px;flex:none;text-align:right;font:400 12.5px 'JetBrains Mono',monospace;color:#69707C">{{ u.trades }}</span>
+<span style="width:92px;flex:none;text-align:right;font:500 12.5px 'JetBrains Mono',monospace;color:{{ u.feeColor }}">{{ u.fee }}</span>
+<div style="flex:1;display:flex;justify-content:flex-end;gap:7px">
+<sc-if value="{{ u.needsAction }}" hint-placeholder-val="{{ false }}">
+<button style="border:1px solid #E3D0A8;background:#FBF1DF;color:#8A5B0E;border-radius:8px;padding:6px 10px;font:600 11px Inter,sans-serif;cursor:pointer">Mark as paid</button>
+</sc-if>
+<button style="border:1px solid #E3E6EA;background:#fff;color:#69707C;border-radius:8px;padding:6px 10px;font:600 11px Inter,sans-serif;cursor:pointer">Manage</button>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px">
+<div style="font:600 13px Inter,sans-serif;color:#161B22;margin-bottom:14px">Billing this period</div>
+<sc-for list="{{ billingRows }}" as="b" hint-placeholder-count="4">
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;border-top:1px solid #EDEFF2">
+<span style="font:400 12.5px Inter,sans-serif;color:#69707C">{{ b.label }}</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:{{ b.color }}">{{ b.value }}</span>
+</div>
+</sc-for>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span style="font:600 13px Inter,sans-serif;color:#161B22">Inactivity</span>
+<span style="font:400 11.5px Inter,sans-serif;color:#9AA1AC">flag after <span style="font-family:'JetBrains Mono',monospace;color:#69707C">30 days</span></span>
+</div>
+<div style="font:400 11.5px/1.5 Inter,sans-serif;color:#9AA1AC;margin-bottom:6px">Flagged automatically. Removing an account is always a manual decision.</div>
+<sc-for list="{{ inactive }}" as="i" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #EDEFF2">
+<span style="width:26px;height:26px;border-radius:99px;background:#E7EAEE;flex:none"></span>
+<div style="flex:1">
+<div style="font:500 12.5px/1 Inter,sans-serif;color:#161B22">{{ i.name }}</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">{{ i.detail }}</div>
+</div>
+<button style="border:1px solid #E3E6EA;background:#fff;color:#69707C;border-radius:8px;padding:6px 10px;font:600 11px Inter,sans-serif;cursor:pointer">Nudge</button>
+<button style="border:1px solid #F0D4D2;background:#FBE9E8;color:#9A2E2A;border-radius:8px;padding:6px 10px;font:600 11px Inter,sans-serif;cursor:pointer">Remove</button>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isTags }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:26px">
+<div style="flex:1">
+<div style="font:600 13.5px Inter,sans-serif;color:#161B22">Tag review</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:5px">Tags are generated by rule and corrected by hand. Your corrections are the feedback loop for the rules.</div>
+</div>
+<sc-for list="{{ tagStats }}" as="t" hint-placeholder-count="3">
+<div style="text-align:right;flex:none">
+<div style="font:600 20px/1 'JetBrains Mono',monospace;color:{{ t.color }}">{{ t.value }}</div>
+<div style="font:400 10.5px/1 Inter,sans-serif;color:#9AA1AC;margin-top:7px">{{ t.label }}</div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ tagRows }}" as="r" hint-placeholder-count="4">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:16px 18px">
+<div style="display:flex;align-items:center;gap:14px">
+<div style="width:44px;height:44px;flex:none;position:relative">
+<svg width="44" height="44" viewBox="0 0 48 48" style="transform:rotate(-90deg)">
+<circle cx="24" cy="24" r="20" fill="none" stroke="#EBEEF1" stroke-width="4"></circle>
+<circle cx="24" cy="24" r="20" fill="none" stroke="{{ r.ringColor }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="{{ r.ringOff }}"></circle>
+</svg>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 12.5px 'JetBrains Mono',monospace;color:{{ r.ringColor }}">{{ r.score }}</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 13.5px/1.3 Inter,sans-serif;color:#161B22">{{ r.question }}</div>
+<div style="font:400 11px/1 'JetBrains Mono',monospace;color:#9AA1AC;margin-top:7px">{{ r.meta }}</div>
+</div>
+<div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:520px">
+<sc-for list="{{ r.tags }}" as="t" hint-placeholder-count="2">
+<span style="display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;font:500 11.5px Inter,sans-serif;color:{{ t.fg }};background:{{ t.bg }};border:1px solid {{ t.border }}">
+{{ t.text }}
+<span style="font:400 12px 'JetBrains Mono',monospace;opacity:.6">{{ t.source }}</span>
+<span style="font:400 13px/1 Inter,sans-serif;opacity:.55;cursor:pointer">×</span>
+</span>
+</sc-for>
+<button style="padding:6px 11px;border:1px dashed #C9CFD6;background:none;border-radius:8px;font:500 11.5px Inter,sans-serif;color:#69707C;cursor:pointer">+ Add tag</button>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isActivityPage }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:11px;padding:9px 13px;display:flex;gap:10px;align-items:center;width:280px">
+<span style="width:11px;height:11px;border-radius:99px;border:1.6px solid #9AA1AC;flex:none"></span>
+<input placeholder="Search all events" style="border:none;outline:none;flex:1;font:400 12.5px Inter,sans-serif;color:#161B22;background:none">
+</div>
+<sc-for list="{{ logFilters }}" as="f" hint-placeholder-count="6">
+<button onClick="{{ f.go }}" style="padding:8px 13px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }}">{{ f.label }}</button>
+</sc-for>
+<span style="flex:1"></span>
+<span style="font:400 11.5px Inter,sans-serif;color:#9AA1AC">{{ logCount }}</span>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;overflow:hidden">
+<sc-for list="{{ fullLog }}" as="a" hint-placeholder-count="10">
+<div style="display:flex;align-items:center;gap:16px;padding:12px 18px;border-top:1px solid {{ a.rule }}">
+<span style="font:400 11px 'JetBrains Mono',monospace;color:#9AA1AC;width:104px;flex:none">{{ a.time }}</span>
+<span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.07em;text-transform:uppercase;padding:4px 7px;border-radius:5px;color:{{ a.fg }};background:{{ a.bg }};width:104px;flex:none;text-align:center">{{ a.event }}</span>
+<span style="font:500 12px Inter,sans-serif;color:#161B22;width:100px;flex:none">{{ a.user }}</span>
+<span style="flex:1;font:400 12.5px Inter,sans-serif;color:#69707C">{{ a.detail }}</span>
+<span style="font:400 11px 'JetBrains Mono',monospace;color:#B4BAC2;flex:none">{{ a.ref }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:20px">
+<div style="font:600 13.5px Inter,sans-serif;color:#161B22;margin-bottom:16px">API integrations</div>
+<div style="display:flex;align-items:center;gap:14px;padding:14px;border:1px solid #E9ECEF;border-radius:12px">
+<span style="width:8px;height:8px;border-radius:99px;background:#1FBE87;flex:none"></span>
+<div style="flex:1">
+<div style="font:500 13px/1 Inter,sans-serif;color:#161B22">Kalshi</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">Connected · feed healthy · 42ms median</div>
+</div>
+<div style="width:150px;flex:none">
+<div style="display:flex;justify-content:space-between;font:400 10.5px 'JetBrains Mono',monospace;color:#9AA1AC;margin-bottom:6px"><span>rate limit</span><span>340 / 500</span></div>
+<div style="height:5px;border-radius:99px;background:#EDEFF2;overflow:hidden"><div style="height:5px;width:68%;background:#1FBE87;border-radius:99px"></div></div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:14px;padding:14px;border:1px dashed #D3D8DE;border-radius:12px;margin-top:10px">
+<span style="width:8px;height:8px;border-radius:99px;background:#C4CAD2;flex:none"></span>
+<div style="flex:1">
+<div style="font:500 13px/1 Inter,sans-serif;color:#69707C">Polymarket</div>
+<div style="font:400 11px/1 Inter,sans-serif;color:#9AA1AC;margin-top:6px">Planned as a second data source — not connected</div>
+</div>
+</div>
+</div>
+<div style="background:#fff;border:1px solid #E3E6EA;border-radius:16px;padding:20px">
+<div style="font:600 13.5px Inter,sans-serif;color:#161B22;margin-bottom:6px">Platform risk limits</div>
+<sc-for list="{{ platformLimits }}" as="l" hint-placeholder-count="4">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-top:1px solid #EDEFF2">
+<div>
+<div style="font:500 12.5px/1 Inter,sans-serif;color:#161B22">{{ l.label }}</div>
+<div style="font:400 11px/1.4 Inter,sans-serif;color:#9AA1AC;margin-top:5px">{{ l.hint }}</div>
+</div>
+<span style="font:500 13px 'JetBrains Mono',monospace;color:#161B22;flex:none">{{ l.value }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="background:#fff;border:1px solid #F0D4D2;border-radius:16px;padding:20px">
+<div style="font:600 13.5px Inter,sans-serif;color:#161B22">Emergency controls</div>
+<div style="font:400 12.5px/1.5 Inter,sans-serif;color:#69707C;margin-top:6px;margin-bottom:18px">Both act platform-wide and take effect immediately. Neither closes an existing position.</div>
+<div style="border:1px solid #F0DDB8;background:#FDF6EA;border-radius:13px;padding:16px;display:flex;align-items:center;gap:16px">
+<div style="flex:1">
+<div style="font:600 13px/1 Inter,sans-serif;color:#8A5B0E">Pause trading</div>
+<div style="font:400 11.5px/1.45 Inter,sans-serif;color:#8A5B0E;opacity:.8;margin-top:6px">Members keep read access. New trades are blocked until you resume.</div>
+</div>
+<button onClick="{{ togglePause }}" style="padding:10px 16px;border:1px solid #D8B274;background:{{ pauseBg }};color:#8A5B0E;border-radius:10px;font:600 12.5px Inter,sans-serif;cursor:pointer;flex:none">{{ pauseLabel }}</button>
+</div>
+<div style="border:1px solid #F0D4D2;background:#FDF0EF;border-radius:13px;padding:16px;display:flex;align-items:center;gap:16px;margin-top:12px">
+<div style="flex:1">
+<div style="font:600 13px/1 Inter,sans-serif;color:#9A2E2A">Global kill switch</div>
+<div style="font:400 11.5px/1.45 Inter,sans-serif;color:#9A2E2A;opacity:.8;margin-top:6px">Stops all platform trading for every member, including you. Existing positions stay open on Kalshi.</div>
+</div>
+<button onClick="{{ openKill }}" style="padding:10px 16px;border:none;background:#E2544F;color:#fff;border-radius:10px;font:600 12.5px Inter,sans-serif;cursor:pointer;flex:none">Kill switch</button>
+</div>
+<div style="margin-top:18px;padding-top:16px;border-top:1px solid #EDEFF2">
+<div style="font:600 12.5px Inter,sans-serif;color:#161B22;margin-bottom:10px">Category locks</div>
+<div style="display:flex;gap:7px;flex-wrap:wrap">
+<sc-for list="{{ categoryLocks }}" as="c" hint-placeholder-count="4">
+<button onClick="{{ c.go }}" style="padding:7px 13px;border-radius:99px;cursor:pointer;font:600 11.5px Inter,sans-serif;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+</sc-for>
+</div>
+<div style="font:400 11px/1.5 Inter,sans-serif;color:#9AA1AC;margin-top:10px">{{ lockSummary }}</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+
+<sc-if value="{{ killOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:rgba(20,26,33,.55);display:flex;align-items:center;justify-content:center;padding:40px">
+<div style="width:452px;background:#fff;border-radius:18px;padding:26px;box-shadow:0 30px 60px -20px rgba(0,0,0,.4)">
+<div style="display:flex;align-items:center;gap:11px;margin-bottom:14px">
+<span style="width:26px;height:26px;border-radius:99px;background:#FBE9E8;color:#9A2E2A;font:600 14px 'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center">!</span>
+<span style="font:600 15.5px Inter,sans-serif;color:#161B22">Activate the global kill switch?</span>
+</div>
+<div style="font:400 13px/1.6 Inter,sans-serif;color:#69707C;text-wrap:pretty">All trading stops platform-wide for all 17 active members, immediately. Existing positions are left open on Kalshi — this does not liquidate anything. Only an admin can turn it back on.</div>
+<div style="margin:18px 0;padding:14px;border-radius:12px;background:#FAFBFC;border:1px solid #E9ECEF">
+<sc-for list="{{ killFacts }}" as="k" hint-placeholder-count="3">
+<div style="display:flex;justify-content:space-between;padding:6px 0">
+<span style="font:400 12px Inter,sans-serif;color:#69707C">{{ k.label }}</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#161B22">{{ k.value }}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:10px">
+<button onClick="{{ closeKill }}" style="flex:1;padding:12px;border:1px solid #E3E6EA;background:#fff;border-radius:11px;font:600 13px Inter,sans-serif;color:#3F4652;cursor:pointer">Cancel</button>
+<button onClick="{{ closeKill }}" style="flex:1;padding:12px;border:none;background:#E2544F;color:#fff;border-radius:11px;font:600 13px Inter,sans-serif;cursor:pointer">Stop all trading</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="width:1440px;font:400 12px/1.6 Inter,sans-serif;color:#7C848D">
+Nav shells: <strong style="font-weight:600;color:#161B22">Sidebar</strong> groups the nine destinations into Trading and Platform — best when you sit in Strategy and Accounts for long stretches. <strong style="font-weight:600;color:#161B22">Icon rail</strong> keeps the same grouping but reclaims 152px for tables. <strong style="font-weight:600;color:#161B22">Top bar</strong> flattens everything into one row, which suits a two-admin platform where nothing is deep.
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;navShell&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;sidebar&quot;,&quot;rail&quot;,&quot;top&quot;],&quot;default&quot;:&quot;sidebar&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Shell&quot;},&quot;startPage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;strategy&quot;,&quot;simulate&quot;,&quot;accounts&quot;,&quot;tags&quot;,&quot;activity&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Shell&quot;}}">
+class Component extends DCLogic {
+  state = {
+    shell: "sidebar", page: "home", stratTab: "configure", step: 0,
+    cat: "All markets", weights: { "All markets": { micro: 60, news: 25, base: 15 }, Economics: null, Politics: { micro: 45, news: 40, base: 15 }, Weather: null, Commodities: null },
+    threshold: 7, tags: { volume: true, liquidity: true, correlation: false },
+    risk: { loss: 3, trades: 15, cooldown: 30 },
+    simVer: "v3-draft", simRange: "Last 6 months", simRan: true,
+    acct: "All", log: "All", killOpen: false, paused: false, locks: { Weather: true }
+  };
+
+  C = { text: "#161B22", muted: "#69707C", faint: "#9AA1AC", border: "#E3E6EA", green: "#1FBE87", greenDark: "#149A6D", blue: "#3E7BFA", red: "#E2544F", gold: "#DE9F35", violet: "#8B6FD8" };
+
+  NAV = [
+    { key: "home", label: "Home", group: "Trading", radius: "5px" },
+    { key: "desk", label: "Decision Desk", group: "Trading", radius: "99px" },
+    { key: "positions", label: "Positions", group: "Trading", radius: "3px" },
+    { key: "performance", label: "Performance", group: "Trading", radius: "99px 99px 3px 3px" },
+    { key: "strategy", label: "Strategy", group: "Platform", radius: "5px", badge: "#DE9F35" },
+    { key: "simulate", label: "Simulate", group: "Platform", radius: "99px" },
+    { key: "accounts", label: "Accounts", group: "Platform", radius: "3px", badge: "#E2544F" },
+    { key: "tags", label: "Tag review", group: "Platform", radius: "99px 3px 99px 3px" },
+    { key: "activity", label: "Activity", group: "Platform", radius: "3px" },
+    { key: "settings", label: "Settings", group: "Platform", radius: "99px" }
+  ];
+
+  TITLES = {
+    home: ["Platform overview", "Everything across all 20 accounts · updated 40 seconds ago"],
+    desk: ["Decision Desk", "Your own trading — the same desk members see"],
+    positions: ["Positions", "Your open and resolved trades"],
+    performance: ["Performance", "Your own track record"],
+    strategy: ["Strategy", "Tune the scoring model and watch signal health"],
+    simulate: ["Simulate", "Backtest a draft against resolved markets"],
+    accounts: ["Accounts", "20 members · 17 active · 1 in grace period · 2 inactive"],
+    tags: ["Tag review", "Spot-check auto-generated tags and correct them"],
+    activity: ["Activity", "Every event across the platform"],
+    settings: ["Settings", "Integrations, platform risk limits and emergency controls"]
+  };
+
+  LOG = [
+    { time: "09:41:22", event: "Trade", user: "Marcus T.", detail: "Took Fed rate cut — September · 200 contracts at 68\u00A2 · live", tone: "green", ref: "T-1042" },
+    { time: "09:38:04", event: "Score", user: "system", detail: "KXGOV-SHUT26 rescored 7.1 → 7.6 on the NO side", tone: "muted", ref: "v3" },
+    { time: "09:12:47", event: "Model", user: "You", detail: "Published v3 — market-activity weight 60%, Politics override added", tone: "blue", ref: "v3" },
+    { time: "09:04:11", event: "Signal", user: "system", detail: "Track record auto-disabled — accuracy dropped 11% over 34 trades", tone: "red", ref: "SIG-3" },
+    { time: "08:55:30", event: "Billing", user: "Dev R.", detail: "July invoice of $54.28 failed — grace period started", tone: "gold", ref: "INV-441" },
+    { time: "08:41:19", event: "Trade", user: "Priya K.", detail: "Took October CPI above 3.0% · 100 contracts at 44\u00A2 · paper", tone: "muted", ref: "T-1041" },
+    { time: "08:20:55", event: "Resolved", user: "Priya K.", detail: "Oil closes above $80 settled NO — loss, -$32.00", tone: "red", ref: "T-0991" },
+    { time: "08:02:13", event: "Tag", user: "You", detail: "Removed \u201CLow liquidity\u201D from KXTEMP-NYC — book was fine at review", tone: "blue", ref: "TAG-88" },
+    { time: "Aug 22", event: "Account", user: "Sasha M.", detail: "Flagged inactive — 31 days without a platform trade", tone: "gold", ref: "U-0012" },
+    { time: "Aug 22", event: "Connection", user: "You", detail: "Kalshi API key rotated from a new device", tone: "muted", ref: "U-0001" }
+  ];
+
+  toneMap(t) {
+    return { green: { fg: "#149A6D", bg: "#E7F8F1" }, blue: { fg: "#1E4FB8", bg: "#E9F0FF" }, gold: { fg: "#8A5B0E", bg: "#FBF1DF" }, red: { fg: "#9A2E2A", bg: "#FBE9E8" }, muted: { fg: this.C.muted, bg: "#F1F3F5" } }[t];
+  }
+
+  chip(on) {
+    return on ? { bg: "#E7F8F1", fg: "#0F7A56", border: this.C.green } : { bg: "#fff", fg: this.C.muted, border: this.C.border };
+  }
+
+  curve(vals, w, h) {
+    const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+    const pts = vals.map((v, i) => [(i / (vals.length - 1)) * w, h - ((v - min) / span) * (h - 10) - 5]);
+    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    return { line, area: line + " L" + w + " " + h + " L0 " + h + " Z" };
+  }
+
+  ringOff(score) { return (125.66 - (score / 10) * 125.66).toFixed(1); }
+  ringColor(s) { return s >= 7 ? this.C.green : s >= 4.5 ? this.C.gold : this.C.red; }
+
+  componentDidMount() {
+    if (this.props.navShell) this.setState({ shell: this.props.navShell });
+    if (this.props.startPage) this.setState({ page: this.props.startPage });
+  }
+
+  renderVals() {
+    const s = this.state, C = this.C;
+    const go = k => () => this.setState({ page: k });
+    const shell = s.shell;
+    const globalW = s.weights["All markets"];
+    const overridden = s.cat !== "All markets" && s.weights[s.cat] !== null;
+    const activeW = overridden ? s.weights[s.cat] : globalW;
+    const cats = ["All markets", "Economics", "Politics", "Weather", "Commodities"];
+    const overrideList = cats.filter(c => c !== "All markets" && s.weights[c] !== null);
+    const total = activeW.micro + activeW.news + activeW.base;
+    const title = this.TITLES[s.page];
+
+    const setW = k => e => {
+      const v = Number(e.target.value);
+      this.setState({ weights: { ...s.weights, [s.cat]: { ...activeW, [k]: v } } });
+    };
+
+    const navItem = n => ({
+      ...n, go: go(n.key),
+      bg: s.page === n.key ? "rgba(31,190,135,.16)" : "transparent",
+      fg: s.page === n.key ? "#8FE9C6" : "#A7B0BA",
+      mark: s.page === n.key ? C.green : "#5C6773",
+      fill: s.page === n.key ? "rgba(31,190,135,.25)" : "transparent",
+      hasBadge: !!n.badge, badge: n.badge || "transparent",
+      justify: shell === "rail" ? "center" : "flex-start"
+    });
+
+    const signals = [
+      { label: "Market activity", status: "healthy", winRate: 64, sample: 142, tone: "green", color: C.green, trend: [58, 60, 59, 62, 61, 63, 64, 63, 65, 64], note: "", action: "" },
+      { label: "News", status: "degraded", winRate: 51, sample: 88, tone: "gold", color: C.gold, trend: [61, 59, 58, 55, 54, 52, 53, 51, 52, 51], note: "Trending down for nine sessions. Auto-disables if it closes below 50% on the rolling window.", action: "Disable now" },
+      { label: "Track record", status: "disabled", winRate: 39, sample: 34, tone: "red", color: C.red, trend: [55, 50, 47, 44, 41, 40, 38, 37, 39, 39], note: "Auto-disabled at 09:04 — accuracy fell 11%. Cooldown ends in 14h 12m.", action: "Re-enable early" }
+    ].map(sg => {
+      const t = this.toneMap(sg.tone);
+      const c = this.curve(sg.trend, 420, 62);
+      const min = Math.min(...sg.trend), max = Math.max(...sg.trend), span = max - min || 1;
+      return {
+        ...sg, ...t, line: c.line,
+        minY: (62 - ((50 - min) / span) * 52 - 5).toFixed(1),
+        trendColor: sg.color,
+        noteBg: sg.tone === "gold" ? "#FDF6EA" : "#FDF0EF",
+        cardBorder: sg.status === "disabled" ? "#F0D4D2" : C.border,
+        hasNote: !!sg.note, hasAction: !!sg.action
+      };
+    });
+
+    const accounts = [
+      { name: "Marcus T.", role: "Member", status: "active", kalshi: "connected", mode: "LIVE", pnl: "+$312", trades: 24, fee: "$62.50" },
+      { name: "Priya K.", role: "Member", status: "active", kalshi: "connected", mode: "LIVE", pnl: "-$41", trades: 18, fee: "$0.00" },
+      { name: "Dev R.", role: "Member", status: "grace", kalshi: "connected", mode: "LIVE", pnl: "+$129", trades: 12, fee: "$25.80", needsAction: true },
+      { name: "Sasha M.", role: "Member", status: "inactive", kalshi: "connected", mode: "PAPER", pnl: "+$8", trades: 2, fee: "$0.00" },
+      { name: "Tomas B.", role: "Member", status: "paused", kalshi: "expired", mode: "LIVE", pnl: "+$74", trades: 9, fee: "$14.80" },
+      { name: "Iris L.", role: "Member", status: "active", kalshi: "connected", mode: "PAPER", pnl: "+$0", trades: 0, fee: "$0.00" },
+      { name: "You", role: "Admin", status: "active", kalshi: "connected", mode: "PAPER", pnl: "+$205", trades: 19, fee: "$0.00" }
+    ].filter(u => s.acct === "All" || (s.acct === "Needs billing" ? u.needsAction : s.acct === "Live" ? u.mode === "LIVE" : s.acct === "Inactive" ? u.status === "inactive" : s.acct === "Admins" ? u.role === "Admin" : true))
+      .map((u, i) => {
+        const st = { active: "green", grace: "gold", paused: "red", inactive: "muted" }[u.status];
+        const t = this.toneMap(st);
+        return {
+          ...u, rule: i ? "#EDEFF2" : "transparent",
+          rowBg: u.needsAction ? "#FFFDF8" : "#fff",
+          statusFg: t.fg, statusBg: t.bg,
+          kalshiDot: u.kalshi === "connected" ? C.green : C.gold,
+          modeFg: u.mode === "LIVE" ? "#0F7A56" : C.muted,
+          modeBg: u.mode === "LIVE" ? "#E7F8F1" : "#F1F3F5",
+          pnlColor: u.pnl.startsWith("-") ? C.red : C.greenDark,
+          feeColor: u.fee === "$0.00" ? C.faint : C.text,
+          avatar: "linear-gradient(140deg,#C9D4E4,#DCE3EB)",
+          needsAction: !!u.needsAction
+        };
+      });
+
+    const tagRows = [
+      { question: "Will the Fed cut rates at the September meeting?", score: 8.4, meta: "KXFED-26SEP · Economics · YES · 6 members took it", tags: [{ text: "Unusual volume", sev: "caution", source: "auto" }, { text: "Fed-adjacent", sev: "info", source: "manual" }] },
+      { question: "Government shutdown before November 1st?", score: 7.6, meta: "KXGOV-SHUT26 · Politics · NO · 3 members took it", tags: [{ text: "Low liquidity", sev: "caution", source: "auto" }] },
+      { question: "Will NYC hit 90°F this week?", score: 7.2, meta: "KXTEMP-NYC · Weather · YES · 1 member took it", tags: [] },
+      { question: "Will October CPI come in above 3.0%?", score: 6.8, meta: "KXCPI-OCT26 · Economics · YES · 2 members took it", tags: [{ text: "News lead", sev: "info", source: "auto" }] }
+    ].map(r => ({
+      ...r, score: r.score.toFixed(1), ringColor: this.ringColor(r.score), ringOff: this.ringOff(r.score),
+      tags: r.tags.map(t => ({
+        ...t,
+        fg: t.sev === "caution" ? "#8A5B0E" : "#1E4FB8",
+        bg: t.sev === "caution" ? "#FDF6EA" : "#F0F5FF",
+        border: t.sev === "caution" ? "#F0DDB8" : "#D3E1FD"
+      }))
+    }));
+
+    const simA = this.curve([0, 3, 2, 6, 5, 9, 8, 11, 10, 14, 13, 16, 15, 19, 21], 700, 220);
+    const simB = this.curve([0, 2, 1.5, 4, 3.5, 6, 5.5, 7, 6.5, 9, 8, 10, 9.5, 11, 12], 700, 220);
+
+    return {
+      shells: [["sidebar", "Sidebar"], ["rail", "Icon rail"], ["top", "Top bar"]].map(([k, label]) => ({
+        label, go: () => this.setState({ shell: k }),
+        bg: shell === k ? "#fff" : "transparent",
+        fg: shell === k ? C.text : "#6E7883",
+        shadow: shell === k ? "0 1px 3px rgba(0,0,0,.12)" : "none"
+      })),
+      shellDir: shell === "top" ? "column" : "row",
+      hasSidebar: shell !== "top",
+      isTopShell: shell === "top",
+      sidebarWide: shell === "sidebar",
+      sidebarW: shell === "rail" ? "62px" : "214px",
+      navGroups: ["Trading", "Platform"].map((g, i) => ({
+        label: g, top: i ? "6px" : "0", showLabel: shell === "sidebar",
+        items: this.NAV.filter(n => n.group === g).map(n => navItem(n))
+      })),
+      navFlat: this.NAV.map(n => navItem(n)),
+
+      pageTitle: title[0], pageSub: title[1],
+      headerStats: [
+        { label: "platform 30d", value: "+$3,842", color: C.greenDark },
+        { label: "fees pending", value: "$768", color: C.text },
+        { label: "open exposure", value: "$14,210", color: C.text }
+      ],
+      riskPill: s.paused
+        ? { label: "Trading paused", bg: "#FDF6EA", fg: "#8A5B0E", border: "#F0DDB8", dot: C.gold }
+        : { label: "Risk within limits", bg: "#E7F8F1", fg: "#0F7A56", border: "#B9EBD6", dot: C.green },
+
+      isHome: s.page === "home", isStrategy: s.page === "strategy", isSim: s.page === "simulate",
+      isAccounts: s.page === "accounts", isTags: s.page === "tags",
+      isActivityPage: s.page === "activity", isSettings: s.page === "settings",
+      goActivity: go("activity"), goSim: go("simulate"),
+
+      homeCards: [
+        {
+          title: "Kalshi feed", status: "healthy", ...this.toneMap("green"),
+          rows: [
+            { label: "Median latency", value: "42ms", color: C.text },
+            { label: "Rate limit", value: "340 / 500", color: C.text },
+            { label: "Markets scored today", value: "128", color: C.text }
+          ]
+        },
+        {
+          title: "Signals", status: "1 disabled", ...this.toneMap("red"),
+          rows: [
+            { label: "Market activity", value: "64%", color: C.greenDark },
+            { label: "News", value: "51%", color: "#B87914" },
+            { label: "Track record", value: "off", color: C.red }
+          ]
+        }
+      ],
+      homeCurve: this.curve([2, 5, 4, 8, 7, 11, 9, 13, 12, 16, 14, 18, 17, 21, 19, 24, 22, 26, 25, 29], 620, 168),
+      pending: [
+        { title: "Track record signal auto-disabled", body: "Accuracy fell 11% over 34 trades. Cooldown ends in 14h.", tone: "red", action: "Signal health", target: "strategy" },
+        { title: "Dev R. payment failed", body: "$54.28 invoice · grace period ends Sep 4.", tone: "gold", action: "Accounts", target: "accounts" },
+        { title: "v3-draft ready to review", body: "Politics override added. Not yet backtested.", tone: "blue", action: "Simulate", target: "simulate" },
+        { title: "2 accounts flagged inactive", body: "No platform trade in 30+ days. Removal is manual.", tone: "muted", action: "Accounts", target: "accounts" }
+      ].map(p => ({
+        ...p, go: go(p.target), dot: this.toneMap(p.tone).fg,
+        bg: p.tone === "red" ? "#FDF0EF" : p.tone === "gold" ? "#FDF6EA" : "#FAFBFC",
+        border: p.tone === "red" ? "#F0D4D2" : p.tone === "gold" ? "#F0DDB8" : "#E9ECEF"
+      })),
+      activityRows: this.LOG.slice(0, 5).map((a, i) => ({ ...a, ...this.toneMap(a.tone), rule: i ? "#EDEFF2" : "transparent" })),
+
+      stratTabs: [["configure", "Configure", false], ["health", "Signal health", true]].map(([k, label, badge]) => ({
+        label, hasBadge: badge, go: () => this.setState({ stratTab: k }),
+        bg: s.stratTab === k ? "#fff" : "transparent",
+        fg: s.stratTab === k ? C.text : C.faint,
+        shadow: s.stratTab === k ? "0 1px 3px rgba(0,0,0,.1)" : "none"
+      })),
+      isConfigure: s.stratTab === "configure", isHealth: s.stratTab === "health",
+
+      steps: ["Signal weights", "Score thresholds", "Risk limits", "Review & publish"].map((label, i) => ({
+        label, hint: ["Per category", "Strong picks and auto-tags", "Per member, per day", "Publish as v4"][i],
+        go: () => this.setState({ step: i }),
+        bg: s.step === i ? "#F3FBF7" : "transparent",
+        fg: s.step === i ? "#0F7A56" : C.text,
+        mark: i < s.step ? "\u2713" : String(i + 1),
+        numFg: i <= s.step ? "#fff" : C.faint,
+        numBg: i <= s.step ? C.green : "#fff",
+        numBorder: i <= s.step ? C.green : "#D3D8DE"
+      })),
+      step0: s.step === 0, step1: s.step === 1, step2: s.step === 2, step3: s.step === 3,
+      prevStep: () => this.setState({ step: Math.max(0, s.step - 1) }),
+      nextStep: () => this.setState({ step: Math.min(3, s.step + 1) }),
+      nextLabel: s.step === 3 ? "Back to weights" : "Continue",
+
+      activeCat: s.cat, isOverridden: overridden,
+      catChips: cats.map(c => ({
+        label: c, go: () => this.setState({ cat: c }),
+        override: c !== "All markets" && s.weights[c] !== null,
+        ...this.chip(s.cat === c)
+      })),
+      showDefaultNotice: !overridden && s.cat !== "All markets",
+      defaultNotice: "Using the platform default — no " + s.cat + " tuning yet.",
+      enableOverride: () => this.setState({ weights: { ...s.weights, [s.cat]: { ...globalW } } }),
+      clearOverride: () => this.setState({ weights: { ...s.weights, [s.cat]: null } }),
+      weightTotal: total,
+      weightTotalColor: total === 100 ? C.greenDark : C.gold,
+      weights: [
+        { key: "micro", label: "Market activity", note: "order flow, volume, spread", color: C.green },
+        { key: "news", label: "News", note: "coverage volume and direction", color: C.blue },
+        { key: "base", label: "Track record", note: "historical accuracy by market type", color: C.violet }
+      ].map(w => ({ ...w, value: activeW[w.key], set: setW(w.key) })),
+
+      threshold: s.threshold,
+      setThreshold: e => this.setState({ threshold: Number(e.target.value) }),
+      thresholdHit: Math.max(0, Math.round((10 - s.threshold) * 31)),
+      autoTags: [
+        { key: "volume", label: "Auto-tag volume anomalies", hint: "Volume above 3× the 30-day average with no news event" },
+        { key: "liquidity", label: "Auto-tag low liquidity", hint: "Book depth under $2,000 on the recommended side" },
+        { key: "correlation", label: "Auto-tag correlated picks", hint: "Two or more strong picks resolving on the same event" }
+      ].map(t => ({
+        ...t, trackBg: s.tags[t.key] ? C.green : "#D3D8DE",
+        justify: s.tags[t.key] ? "flex-end" : "flex-start",
+        toggle: () => this.setState({ tags: { ...s.tags, [t.key]: !s.tags[t.key] } })
+      })),
+      riskFields: [
+        { key: "loss", label: "Daily loss limit", value: s.risk.loss, unit: "%", stepSize: 1 },
+        { key: "trades", label: "Max trades per day", value: s.risk.trades, unit: "", stepSize: 1 },
+        { key: "cooldown", label: "Cooldown after loss", value: s.risk.cooldown, unit: "min", stepSize: 15 }
+      ].map(r => ({
+        ...r,
+        inc: () => this.setState({ risk: { ...s.risk, [r.key]: s.risk[r.key] + r.stepSize } }),
+        dec: () => this.setState({ risk: { ...s.risk, [r.key]: Math.max(0, s.risk[r.key] - r.stepSize) } })
+      })),
+      reviewRows: [
+        { label: "Default weights", value: globalW.micro + " / " + globalW.news + " / " + globalW.base, color: C.text },
+        { label: "Category overrides", value: overrideList.length ? overrideList.join(", ") : "none", color: overrideList.length ? "#B87914" : C.faint },
+        { label: "Strong-pick threshold", value: s.threshold + "+", color: C.text },
+        { label: "Auto-tags enabled", value: Object.values(s.tags).filter(Boolean).length + " of 3", color: C.text },
+        { label: "Daily loss limit", value: s.risk.loss + "%", color: C.text },
+        { label: "Max trades / cooldown", value: s.risk.trades + " · " + s.risk.cooldown + "m", color: C.text }
+      ],
+
+      signals, minWinRate: 50,
+      autoRules: [
+        { label: "Rolling accuracy window", value: "100 trades" },
+        { label: "Minimum win rate", value: "50%" },
+        { label: "Disable if accuracy drops", value: "> 10%" },
+        { label: "Disable on drawdown trigger", value: "on" },
+        { label: "Disable on correlation spike", value: "on" },
+        { label: "Cooldown after disable", value: "24h" }
+      ],
+
+      simVersions: ["v3-draft", "v2"].map(v => ({
+        label: v, go: () => this.setState({ simVer: v }),
+        border: s.simVer === v ? C.green : C.border,
+        bg: s.simVer === v ? "#F3FBF7" : "#fff",
+        fg: s.simVer === v ? "#0F7A56" : C.muted
+      })),
+      simRanges: ["Last 30 days", "Last 3 months", "Last 6 months"].map(r => ({
+        label: r, go: () => this.setState({ simRange: r }), ...this.chip(s.simRange === r)
+      })),
+      runSim: () => this.setState({ simRan: true }),
+      simCta: s.simRan ? "Run again" : "Run backtest",
+      simRan: s.simRan, simIdle: !s.simRan,
+      simStats: [
+        { label: "simulated net PnL", value: "+$412", color: C.greenDark, delta: "+$96 vs live", deltaColor: C.greenDark },
+        { label: "max drawdown", value: "-11%", color: C.text, delta: "-3pt vs live", deltaColor: C.red },
+        { label: "trades taken", value: "34", color: C.text, delta: "+8 vs live", deltaColor: C.faint },
+        { label: "win rate", value: "62%", color: C.text, delta: "+1pt vs live", deltaColor: C.greenDark }
+      ],
+      simDraftCurve: simA, simLiveCurve: simB,
+
+      accounts,
+      acctFilters: ["All", "Live", "Needs billing", "Inactive", "Admins"].map(f => ({
+        label: f, go: () => this.setState({ acct: f }), ...this.chip(s.acct === f)
+      })),
+      billingRows: [
+        { label: "Members with fees accruing", value: "11", color: C.text },
+        { label: "Fees pending this period", value: "$768.40", color: C.text },
+        { label: "Failed payments", value: "1", color: "#B87914" },
+        { label: "Collected last period", value: "$1,204.10", color: C.greenDark }
+      ],
+      inactive: [
+        { name: "Sasha M.", detail: "31 days since last platform trade" },
+        { name: "Owen H.", detail: "44 days · still connected to Kalshi" }
+      ],
+
+      tagStats: [
+        { label: "tags this week", value: "62", color: C.text },
+        { label: "auto-generated", value: "88%", color: C.text },
+        { label: "corrected by hand", value: "9", color: "#B87914" }
+      ],
+      tagRows,
+
+      logFilters: ["All", "Trade", "Model", "Signal", "Billing", "Account"].map(f => ({
+        label: f, go: () => this.setState({ log: f }), ...this.chip(s.log === f)
+      })),
+      fullLog: this.LOG.filter(a => s.log === "All" || a.event === s.log).map((a, i) => ({ ...a, ...this.toneMap(a.tone), rule: i ? "#EDEFF2" : "transparent" })),
+      logCount: this.LOG.filter(a => s.log === "All" || a.event === s.log).length + " of 4,182 events",
+
+      platformLimits: [
+        { label: "Daily loss cap", hint: "Platform-wide, across all members", value: "5%" },
+        { label: "Max exposure per market", hint: "Share of total platform exposure", value: "2%" },
+        { label: "Max members in one market", hint: "Concentration guard", value: "8" },
+        { label: "Inactivity flag", hint: "Days without a platform trade", value: "30d" }
+      ],
+      togglePause: () => this.setState({ paused: !s.paused }),
+      pauseLabel: s.paused ? "Resume trading" : "Pause trading",
+      pauseBg: s.paused ? "#F5E4C4" : "#fff",
+      categoryLocks: ["Economics", "Politics", "Weather", "Commodities"].map(c => ({
+        label: c, go: () => this.setState({ locks: { ...s.locks, [c]: !s.locks[c] } }),
+        ...(s.locks[c] ? { bg: "#FBE9E8", fg: "#9A2E2A", border: "#F0D4D2" } : { bg: "#fff", fg: C.muted, border: C.border })
+      })),
+      lockSummary: Object.keys(s.locks).filter(k => s.locks[k]).length
+        ? "Locked: " + Object.keys(s.locks).filter(k => s.locks[k]).join(", ") + ". No new trades are scored in a locked category."
+        : "No categories locked.",
+
+      killOpen: s.killOpen,
+      openKill: () => this.setState({ killOpen: true }),
+      closeKill: () => this.setState({ killOpen: false }),
+      killFacts: [
+        { label: "Members affected", value: "17 active" },
+        { label: "Open positions left untouched", value: "38 · $14,210" },
+        { label: "Reversible by", value: "Admin only" }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

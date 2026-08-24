@@ -1,0 +1,13 @@
+# This repo is authored on Windows but built on Linux (Vercel, Supabase Edge
+# Functions, EAS). Normalise to LF in the repository so CRLF never reaches a
+# deploy target or shows up as whole-file diff noise.
+* text=auto eol=lf
+
+# Binary-ish assets git should not try to normalise.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.ttf binary
+*.otf binary

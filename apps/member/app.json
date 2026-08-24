@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Outcome Engine",
+    "slug": "outcome-engine",
+    "scheme": "outcomeengine",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F1F3F5"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.outcomeengine.member"
+    },
+    "android": {
+      "package": "com.outcomeengine.member",
+      "adaptiveIcon": {
+        "backgroundColor": "#1FBE87"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#1FBE87"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "eas": {}
+    }
+  }
+}
