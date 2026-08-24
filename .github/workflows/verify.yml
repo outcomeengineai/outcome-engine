@@ -1,0 +1,38 @@
+name: Verify
+
+# Guards the invariants that carry money. Runs on every push and PR.
+#
+# The shared tests are the important ones: they pin the fee rule (20% of net,
+# losses offsetting wins, a losing month owing nothing) and the settlement
+# allocation that keeps a member's billed PnL equal to their real PnL.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Shared package — fee and score invariants
+        run: npm run test -w @outcome/shared
+
+      - name: Admin dashboard — build and typecheck
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+        run: npm run build -w @outcome/admin
+
+      - name: Member app — typecheck
+        run: npm run typecheck -w @outcome/member
