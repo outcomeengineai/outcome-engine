@@ -25,8 +25,25 @@ jobs:
 
       - run: npm ci
 
+      # packages/shared/dist is gitignored, so it has to be built before
+      # anything imports it. This also emits the Deno bundle the Edge
+      # Functions use, which IS committed — CI regenerating it is how a
+      # drifted bundle would show up as a dirty tree below.
+      - name: Build shared package
+        run: npm run build:shared
+
       - name: Shared package — fee and score invariants
         run: npm run test -w @outcome/shared
+
+      - name: Committed Deno bundle matches packages/shared source
+        run: |
+          if ! git diff --quiet -- supabase/functions/_shared/; then
+            echo "The committed Edge Function bundle is stale."
+            echo "Run: npm run build:shared   and commit the result."
+            git diff --stat -- supabase/functions/_shared/
+            exit 1
+          fi
+          echo "Bundle is in sync."
 
       - name: Admin dashboard — build and typecheck
         env:
