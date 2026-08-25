@@ -32,6 +32,11 @@ jobs:
       - name: Build shared package
         run: npm run build:shared
 
+      # Separate from `build` on purpose: this needs esbuild, whose install
+      # script some environments block, and app builds must not depend on it.
+      - name: Regenerate the Edge Function bundle
+        run: npm run bundle:shared
+
       - name: Shared package — fee and score invariants
         run: npm run test -w @outcome/shared
 

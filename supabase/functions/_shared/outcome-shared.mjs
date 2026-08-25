@@ -1,4 +1,4 @@
-/// <reference types="./outcome-shared.d.mts" /> // GENERATED from packages/shared/src — do not edit. Rebuild: npm run build -w @outcome/shared
+/// <reference types="./outcome-shared.d.mts" /> // GENERATED from packages/shared/src — do not edit. Rebuild: npm run bundle:shared
 
 // src/types.ts
 var SIGNAL_LABELS = {

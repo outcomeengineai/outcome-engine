@@ -14,7 +14,8 @@
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",
     "fn:serve": "supabase functions serve --no-verify-jwt",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "bundle:shared": "npm run bundle -w @outcome/shared"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
