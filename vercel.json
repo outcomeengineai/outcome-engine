@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+
+  "//": [
+    "Vercel deploys apps/admin out of an npm workspace monorepo.",
+    "",
+    "Set the project's Root Directory to the REPOSITORY ROOT (.), not",
+    "apps/admin. Two reasons: npm has to install from the root for the",
+    "@outcome/shared workspace link to resolve at all, and the shared package",
+    "has to be BUILT before next build can import it — packages/shared/dist is",
+    "generated, not committed.",
+    "",
+    "Getting this wrong fails with: Module not found: Can't resolve '@outcome/shared'"
+  ],
+
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build:shared && npm run build -w @outcome/admin",
+  "outputDirectory": "apps/admin/.next"
+}
