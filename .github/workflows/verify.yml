@@ -40,15 +40,21 @@ jobs:
       - name: Shared package — fee and score invariants
         run: npm run test -w @outcome/shared
 
-      - name: Committed Deno bundle matches packages/shared source
+      - name: Committed build output matches packages/shared source
         run: |
-          if ! git diff --quiet -- supabase/functions/_shared/; then
-            echo "The committed Edge Function bundle is stale."
-            echo "Run: npm run build:shared   and commit the result."
-            git diff --stat -- supabase/functions/_shared/
-            exit 1
+          stale=0
+          if ! git diff --quiet -- packages/shared/dist/; then
+            echo "packages/shared/dist is stale. Run: npm run build:shared"
+            git diff --stat -- packages/shared/dist/
+            stale=1
           fi
-          echo "Bundle is in sync."
+          if ! git diff --quiet -- supabase/functions/_shared/; then
+            echo "The Edge Function bundle is stale. Run: npm run bundle:shared"
+            git diff --stat -- supabase/functions/_shared/
+            stale=1
+          fi
+          [ "$stale" = "0" ] && echo "Both committed artifacts are in sync."
+          exit $stale
 
       - name: Admin dashboard — build and typecheck
         env:

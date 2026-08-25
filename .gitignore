@@ -1,5 +1,12 @@
 node_modules/
 dist/
+
+# Exception: the shared package's build output IS committed, for the same
+# reason the Edge Function bundle is — consumers must be able to resolve
+# @outcome/shared straight from a fresh clone, with no build step and no
+# assumption about which directory the build runs from. CI regenerates it
+# and fails on drift, so it cannot go stale.
+!packages/shared/dist/
 .next/
 .expo/
 .turbo/
