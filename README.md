@@ -95,6 +95,26 @@ The value has to exist in both places: Vault is what `invoke_edge_function()`
 reads when pg_cron fires, and the Edge Function secret is what the function
 compares the incoming header against.
 
+### Deploying the admin dashboard (Vercel)
+
+Set the project's **Root Directory to the repository root (`.`)**, not
+`apps/admin`. Two reasons, and they bite together:
+
+- npm has to install from the root or the `@outcome/shared` workspace link
+  never forms
+- `packages/shared/dist` is generated, not committed, so it has to be built
+  before `next build` can import it
+
+`vercel.json` handles both once the root directory is right. Getting it wrong
+fails with `Module not found: Can't resolve '@outcome/shared'`.
+
+Note that `vercel.json` cannot carry comments — Vercel's schema rejects
+unknown keys, including the `//` convention — which is why this explanation
+lives here instead.
+
+Environment variables go in Vercel's dashboard, not a file:
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Both public.
+
 ## The five things that matter
 
 **1. Money is integer cents, everywhere.** Contract prices are whole cents 1–99
