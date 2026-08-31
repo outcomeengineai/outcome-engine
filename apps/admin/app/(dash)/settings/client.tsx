@@ -93,7 +93,7 @@ const NUMERIC_FIELDS: Array<{ key: string; label: string; hint: string; step?: n
   { key: 'daily_loss_limit_cents', label: 'Daily loss cap (cents)', hint: 'Platform-wide default, per member per day' },
   { key: 'max_exposure_per_market_cents', label: 'Max exposure per market (cents)', hint: 'Per member, per market, per day' },
   { key: 'snapshot_retention_days', label: 'Snapshot retention (days)', hint: 'Raw rows are rolled into daily aggregates after this' },
-  { key: 'ingest_max_markets', label: 'Markets per ingestion run', hint: 'Higher costs more Kalshi calls per tick' },
+  { key: 'ingest_max_events', label: 'Events per ingestion run', hint: '~300 events yields ~2,700 markets. Higher costs more Kalshi calls per tick' },
 ];
 
 export function SettingsForm({ settings }: { settings: Record<string, unknown> }) {
