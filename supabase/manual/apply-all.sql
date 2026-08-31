@@ -1668,6 +1668,25 @@ revoke all on public.news_cache from anon;
 alter default privileges in schema public revoke all on tables from anon;
 
 
+-- ===== 20260823000900_ingest_events_setting.sql ====================
+
+-- ===========================================================================
+-- Ingestion now walks EVENTS, not the flat markets listing, so the budget is
+-- counted in events rather than markets.
+--
+-- Measured against the live API: 400 events yields ~2,800 markets and ~2,700
+-- snapshots. 300 is a comfortable default for a platform serving ~20 people
+-- and stays well inside Kalshi's public rate limits at a 5-minute cadence.
+-- ===========================================================================
+
+insert into public.platform_settings (key, value)
+values ('ingest_max_events', '300'::jsonb)
+on conflict (key) do nothing;
+
+-- The old key counted markets from an endpoint we no longer poll.
+delete from public.platform_settings where key = 'ingest_max_markets';
+
+
 -- ===== record these migrations as applied =========================
 create schema if not exists supabase_migrations;
 
@@ -1685,7 +1704,8 @@ values
   ('20260823000400'),
   ('20260823000600'),
   ('20260823000700'),
-  ('20260823000800')
+  ('20260823000800'),
+  ('20260823000900')
 on conflict (version) do nothing;
 
 commit;

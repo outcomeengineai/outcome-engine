@@ -186,53 +186,104 @@ export async function kalshiRequest<T = unknown>(
 // Public market data — no credentials
 // --------------------------------------------------------------------------
 
+/**
+ * Unit conversion at the API boundary.
+ *
+ * Kalshi returns prices as DOLLAR STRINGS ("0.7100") and volume / open
+ * interest as fixed-point strings ("118109.87"). Everything downstream works
+ * in integer cents and whole contracts, so the conversion happens here, once,
+ * rather than being rediscovered at each call site.
+ *
+ * These field names replaced the older numeric `yes_bid` / `last_price` /
+ * `volume` fields. Reading the old names silently yields undefined, which is
+ * how an ingestion run can write 800 markets and zero snapshots.
+ */
+export function dollarsToCents(v: string | number | null | undefined): number {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+export function fixedToInt(v: string | number | null | undefined): number {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
 export interface KalshiMarket {
   ticker: string;
   event_ticker?: string;
   title: string;
-  subtitle?: string;
-  category?: string;
+  yes_sub_title?: string;
+  /** 'active' while tradeable; 'settled' or 'finalized' once resolved. */
   status: string;
   close_time?: string;
-  /** Cents, 1..99. */
-  yes_bid?: number;
-  yes_ask?: number;
-  no_bid?: number;
-  no_ask?: number;
-  last_price?: number;
-  previous_price?: number;
-  volume?: number;
-  volume_24h?: number;
-  open_interest?: number;
-  liquidity?: number;
+  /** Dollar strings, e.g. "0.7100". Use dollarsToCents(). */
+  yes_bid_dollars?: string;
+  yes_ask_dollars?: string;
+  no_bid_dollars?: string;
+  no_ask_dollars?: string;
+  last_price_dollars?: string;
+  previous_price_dollars?: string;
+  liquidity_dollars?: string;
+  /** Fixed-point strings, e.g. "118109.87". Use fixedToInt(). */
+  volume_fp?: string;
+  volume_24h_fp?: string;
+  open_interest_fp?: string;
+  /** 'yes' | 'no' | '' — empty until settlement. */
   result?: string;
+  /** Present on multi-variate-event shards, which carry no order book. */
+  mve_collection_ticker?: string;
 }
 
-export async function listMarkets(params: {
+export interface KalshiEvent {
+  event_ticker: string;
+  series_ticker?: string;
+  title: string;
+  /** 'Politics', 'Economics', 'Climate and Weather', ... Lives on the EVENT. */
+  category?: string;
+  markets?: KalshiMarket[];
+}
+
+/**
+ * List events with their markets nested.
+ *
+ * This is the endpoint ingestion uses, and the choice is load-bearing. The
+ * flat /markets listing is dominated by multi-variate-event shards that have
+ * no order book — 1,200 consecutive results, every price zero — so polling it
+ * yields markets nobody can trade. Events carry the real contracts, and they
+ * carry the category, which /markets does not return at all.
+ */
+export async function listEventsWithMarkets(params: {
   status?: string;
   limit?: number;
   cursor?: string;
-}): Promise<{ markets: KalshiMarket[]; cursor?: string }> {
-  return await kalshiRequest('/markets', {
-    query: { status: params.status, limit: params.limit ?? 200, cursor: params.cursor },
+}): Promise<{ events: KalshiEvent[]; cursor?: string }> {
+  return await kalshiRequest('/events', {
+    query: {
+      status: params.status,
+      limit: params.limit ?? 200,
+      cursor: params.cursor,
+      with_nested_markets: 'true',
+    },
   });
 }
 
-/** Walk the cursor until `max` markets have been collected. */
-export async function listAllMarkets(
+/** Walk the cursor until `maxEvents` events have been collected. */
+export async function listAllEventsWithMarkets(
   status: string,
-  max: number,
-): Promise<KalshiMarket[]> {
-  const out: KalshiMarket[] = [];
+  maxEvents: number,
+): Promise<KalshiEvent[]> {
+  const out: KalshiEvent[] = [];
   let cursor: string | undefined;
 
-  while (out.length < max) {
-    const page = await listMarkets({
+  while (out.length < maxEvents) {
+    const page = await listEventsWithMarkets({
       status,
-      limit: Math.min(200, max - out.length),
+      limit: Math.min(200, maxEvents - out.length),
       cursor,
     });
-    const batch = page.markets ?? [];
+    const batch = page.events ?? [];
     out.push(...batch);
     cursor = page.cursor;
     if (!cursor || batch.length === 0) break;

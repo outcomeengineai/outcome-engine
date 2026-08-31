@@ -1,58 +1,72 @@
 /**
  * Market ingestion — scheduled, every 5 minutes.
  *
- * Polls Kalshi's PUBLIC market endpoints, so it uses no credentials at all and
- * costs nothing against any member's rate limit. Every user's view fans out
- * from these shared rows; nothing here is per-user, and it must stay that way
- * or twenty members become twenty times the API load for identical data.
+ * Polls Kalshi's PUBLIC endpoints, so it uses no credentials and costs nothing
+ * against any member's rate limit. Every user's view fans out from these shared
+ * rows; nothing here is per-user, and it must stay that way or twenty members
+ * become twenty times the API load for identical data.
  *
- * Writes markets + market_snapshots. Scoring runs separately, a minute behind.
+ * Reads EVENTS with nested markets rather than the flat /markets listing. That
+ * listing is dominated by multi-variate-event shards carrying no order book —
+ * 1,200 consecutive results with every price at zero — and it does not return
+ * a category at all. Events carry the tradeable contracts and the category.
  */
 
 import { handler, json, readJson, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
-import { KalshiError, listAllMarkets, type KalshiMarket } from '../_shared/kalshi.ts';
+import {
+  dollarsToCents,
+  fixedToInt,
+  KalshiError,
+  listAllEventsWithMarkets,
+  type KalshiEvent,
+  type KalshiMarket,
+} from '../_shared/kalshi.ts';
 import { logActivity } from '../_shared/log.ts';
 
 /**
- * Kalshi's category field is inconsistent and sometimes absent. Normalise to
- * the small set the strategy screen offers per-category weight overrides for,
- * because an override keyed to a category string that never appears is an
- * override that silently does nothing.
+ * Kalshi's own categories, mapped onto the shorter names the strategy screen
+ * offers per-category weight overrides for. Anything unrecognised passes
+ * through unchanged rather than being flattened into 'Other', so a new Kalshi
+ * category shows up in the admin UI instead of disappearing.
  */
-function normalizeCategory(m: KalshiMarket): string {
-  const raw = (m.category ?? '').trim();
-  const t = `${raw} ${m.title ?? ''}`.toLowerCase();
+const CATEGORY_MAP: Record<string, string> = {
+  'Climate and Weather': 'Weather',
+  'Science and Technology': 'Science',
+  'Elections': 'Politics',
+  'Companies': 'Financials',
+};
 
-  if (/\b(fed|cpi|inflation|gdp|jobs|unemployment|rate|economic)/.test(t)) return 'Economics';
-  if (/\b(election|senate|congress|president|poll|nomin|politic)/.test(t)) return 'Politics';
-  if (/\b(temperature|rain|snow|hurricane|weather|degrees)/.test(t)) return 'Weather';
-  if (/\b(bitcoin|ethereum|crypto|nasdaq|s&p|stock|index)/.test(t)) return 'Financials';
-  if (/\b(oscar|grammy|box office|award|rotten tomatoes)/.test(t)) return 'Entertainment';
-  if (/\b(nfl|nba|mlb|soccer|match|game|championship)/.test(t)) return 'Sports';
-
-  return raw || 'Other';
+function normalizeCategory(event: KalshiEvent): string {
+  const raw = (event.category ?? '').trim();
+  if (!raw) return 'Other';
+  return CATEGORY_MAP[raw] ?? raw;
 }
 
 /**
- * Best available YES price in cents.
+ * Best available YES price, in whole cents.
  *
- * Prefer the midpoint of the book over last_price: last_price is whatever
+ * Prefers the midpoint of the book over last price: last price is whatever
  * happened to trade most recently, which on a thin market can be minutes stale
- * and several cents off what a member would actually pay right now.
+ * and several cents from what a member would actually pay now.
+ *
+ * Returns null when there is no price at all — a real market with no book yet,
+ * which is worth recording as a market but has nothing honest to snapshot.
  */
 function yesPriceCents(m: KalshiMarket): number | null {
-  const bid = m.yes_bid ?? 0;
-  const ask = m.yes_ask ?? 0;
+  const bid = dollarsToCents(m.yes_bid_dollars);
+  const ask = dollarsToCents(m.yes_ask_dollars);
   if (bid > 0 && ask > 0) return Math.round((bid + ask) / 2);
-  if (m.last_price && m.last_price > 0) return m.last_price;
+
+  const last = dollarsToCents(m.last_price_dollars);
+  if (last > 0) return last;
   if (bid > 0) return bid;
   if (ask > 0) return ask;
   return null;
 }
 
 function spreadCents(m: KalshiMarket): number {
-  const bid = m.yes_bid ?? 0;
-  const ask = m.yes_ask ?? 0;
+  const bid = dollarsToCents(m.yes_bid_dollars);
+  const ask = dollarsToCents(m.yes_ask_dollars);
   return bid > 0 && ask > 0 ? Math.max(0, ask - bid) : 100;
 }
 
@@ -60,23 +74,23 @@ Deno.serve(handler(async (req) => {
   const db = serviceClient();
   await requireCronOrAdmin(req, db);
 
-  const body = await readJson<{ maxMarkets?: number }>(req);
+  const body = await readJson<{ maxEvents?: number }>(req);
   const started = Date.now();
 
   const { data: maxSetting } = await db
     .from('platform_settings')
     .select('value')
-    .eq('key', 'ingest_max_markets')
+    .eq('key', 'ingest_max_events')
     .maybeSingle();
 
-  const max = body.maxMarkets ?? Number(maxSetting?.value ?? 400);
+  const maxEvents = body.maxEvents ?? Number(maxSetting?.value ?? 300);
 
-  let markets: KalshiMarket[];
+  let events: KalshiEvent[];
   try {
-    markets = await listAllMarkets('open', max);
+    events = await listAllEventsWithMarkets('open', maxEvents);
   } catch (err) {
-    // A rate limit is a transient condition, not a failure worth alarming on —
-    // the next tick in five minutes will pick up where this left off.
+    // A rate limit is transient, not worth alarming on — the next tick in five
+    // minutes picks up where this left off.
     const rateLimited = err instanceof KalshiError && err.status === 429;
     await logActivity(db, {
       type: rateLimited ? 'ingest.rate_limited' : 'ingest.failed',
@@ -91,38 +105,52 @@ Deno.serve(handler(async (req) => {
   const marketRows: Record<string, unknown>[] = [];
   const snapshotRows: Record<string, unknown>[] = [];
   const now = new Date().toISOString();
+
+  let seen = 0;
   let skippedNoPrice = 0;
+  let skippedShard = 0;
 
-  for (const m of markets) {
-    if (!m.ticker) continue;
+  for (const event of events) {
+    const category = normalizeCategory(event);
 
-    marketRows.push({
-      id: m.ticker,
-      event_ticker: m.event_ticker ?? null,
-      question: m.title ?? m.ticker,
-      category: normalizeCategory(m),
-      close_time: m.close_time ?? null,
-      status: m.status ?? null,
-      updated_at: now,
-    });
+    for (const m of event.markets ?? []) {
+      if (!m.ticker) continue;
+      seen++;
 
-    const price = yesPriceCents(m);
-    if (price === null) {
-      // A market with no two-sided book yet is real, but there is nothing
-      // honest to snapshot. Record the market, skip the price row.
-      skippedNoPrice++;
-      continue;
+      // Multi-variate-event shards are synthetic legs with no book. They exist
+      // in the API but nobody can trade them, so they would only ever dilute
+      // the desk.
+      if (m.mve_collection_ticker) {
+        skippedShard++;
+        continue;
+      }
+
+      marketRows.push({
+        id: m.ticker,
+        event_ticker: m.event_ticker ?? event.event_ticker,
+        question: m.title ?? event.title ?? m.ticker,
+        category,
+        close_time: m.close_time ?? null,
+        status: m.status ?? null,
+        updated_at: now,
+      });
+
+      const price = yesPriceCents(m);
+      if (price === null) {
+        skippedNoPrice++;
+        continue;
+      }
+
+      snapshotRows.push({
+        market_id: m.ticker,
+        ts: now,
+        price,
+        volume: fixedToInt(m.volume_fp),
+        spread: spreadCents(m),
+        open_interest: fixedToInt(m.open_interest_fp),
+        liquidity: dollarsToCents(m.liquidity_dollars),
+      });
     }
-
-    snapshotRows.push({
-      market_id: m.ticker,
-      ts: now,
-      price,
-      volume: m.volume ?? 0,
-      spread: spreadCents(m),
-      open_interest: m.open_interest ?? 0,
-      liquidity: m.liquidity ?? 0,
-    });
   }
 
   // Markets first — snapshots carry an FK to them.
@@ -143,16 +171,20 @@ Deno.serve(handler(async (req) => {
 
   const result = {
     ok: true,
-    fetched: markets.length,
+    events: events.length,
+    marketsSeen: seen,
     markets: marketRows.length,
     snapshots: snapshotRows.length,
+    skippedShard,
     skippedNoPrice,
     ms: Date.now() - started,
   };
 
   await logActivity(db, {
     type: 'ingest.completed',
-    detail: `${result.snapshots} snapshots across ${result.markets} markets`,
+    detail:
+      `${result.snapshots} snapshots across ${result.markets} markets ` +
+      `from ${result.events} events (${skippedShard} shards, ${skippedNoPrice} unpriced)`,
     metadata: result,
   });
 
