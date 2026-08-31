@@ -69,6 +69,16 @@ jobs:
         if: ${{ !inputs.migrations_only }}
         run: supabase functions deploy
 
+      # A green run is not the same as a working database. Print what the
+      # remote actually has applied, so "success" is backed by evidence
+      # rather than by db push having exited zero.
+      - name: Confirm migrations applied remotely
+        run: |
+          echo '### Migrations on the remote' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          supabase migration list 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
       - name: Summary
         run: |
           echo "### Supabase deploy complete" >> $GITHUB_STEP_SUMMARY
