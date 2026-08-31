@@ -65,8 +65,14 @@ jobs:
       # No build step: the shared fee/score bundle at
       # supabase/functions/_shared/outcome-shared.mjs is committed precisely so
       # the functions deploy straight from source.
+      # Migrations and functions authenticate DIFFERENTLY: db push needs the
+      # database password, functions deploy needs only the access token.
+      # Coupling them meant a wrong password blocked both, which is what
+      # happened. `!cancelled()` lets functions deploy even when migrations
+      # failed — the job still reports failure, but one bad credential no
+      # longer holds up the half that does not need it.
       - name: Deploy Edge Functions
-        if: ${{ !inputs.migrations_only }}
+        if: ${{ !inputs.migrations_only && !cancelled() }}
         run: supabase functions deploy
 
       # A green run is not the same as a working database. Print what the
