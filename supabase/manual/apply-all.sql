@@ -1,12 +1,12 @@
 -- =========================================================================
--- GENERATED — do not edit. Rebuild: node scripts/build-manual-sql.mjs
+-- GENERATED — do not edit. Rebuild: npm run build:manual-sql
 --
 -- Every migration except the pg_cron one, concatenated in order and wrapped
 -- in a single transaction. Paste the whole thing into the Supabase SQL
 -- editor and Run. It is all-or-nothing: if any statement fails, nothing is
 -- applied and you can fix and re-run from a clean slate.
 --
--- Run supabase/manual/apply-cron.sql afterwards, once the Vault secrets exist.
+-- Run apply-cron.sql afterwards, once the Vault secrets exist.
 -- =========================================================================
 
 begin;
@@ -1637,8 +1637,15 @@ create policy news_cache_select on public.news_cache
   for select to authenticated using (true);
 
 
--- ===== mark these migrations as applied ==========================
--- Without this, a future `supabase db push` would re-run them and fail.
+-- ===== record these migrations as applied =========================
+create schema if not exists supabase_migrations;
+
+create table if not exists supabase_migrations.schema_migrations (
+  version    text not null primary key,
+  statements text[],
+  name       text
+);
+
 insert into supabase_migrations.schema_migrations (version)
 values
   ('20260823000100'),

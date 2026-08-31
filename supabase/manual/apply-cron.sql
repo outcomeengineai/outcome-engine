@@ -1,7 +1,8 @@
--- GENERATED — run LAST, after the three Vault secrets exist.
--- Not wrapped in a transaction: pg_cron and pg_net may need enabling from
--- Database -> Extensions first, and a failure here should not roll back
--- anything else.
+-- GENERATED — do not edit. Rebuild: npm run build:manual-sql
+--
+-- Run LAST, after the three Vault secrets exist. Deliberately NOT wrapped in
+-- a transaction: pg_cron and pg_net may need enabling from Database ->
+-- Extensions first, and a failure here should not roll back anything else.
 
 -- ===========================================================================
 -- Scheduled jobs.
@@ -121,5 +122,17 @@ select cron.schedule(
   $$ select public.invoke_edge_function('run-billing', '{"mode":"grace_only"}'::jsonb); $$
 );
 
+
+-- ===== record these migrations as applied =========================
+create schema if not exists supabase_migrations;
+
+create table if not exists supabase_migrations.schema_migrations (
+  version    text not null primary key,
+  statements text[],
+  name       text
+);
+
 insert into supabase_migrations.schema_migrations (version)
-values ('20260823000500') on conflict (version) do nothing;
+values
+  ('20260823000500')
+on conflict (version) do nothing;
