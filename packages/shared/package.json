@@ -17,8 +17,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test test/",
-    "bundle:deno": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=../../supabase/functions/_shared/outcome-shared.mjs --banner:js=\"/// <reference types=\\\"./outcome-shared.d.mts\\\" /> // GENERATED from packages/shared/src \u2014 do not edit. Rebuild: npm run bundle:shared\"",
+    "test": "npm run build && node --test \"test/**/*.test.mjs\"",
+    "bundle:deno": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=../../supabase/functions/_shared/outcome-shared.mjs --banner:js=\"/// <reference types=\\\"./outcome-shared.d.mts\\\" /> // GENERATED from packages/shared/src — do not edit. Rebuild: npm run bundle:shared\"",
     "bundle:types": "dts-bundle-generator -o ../../supabase/functions/_shared/outcome-shared.d.mts --no-banner --no-check --export-referenced-types=false src/index.ts",
     "bundle": "npm run bundle:deno && npm run bundle:types"
   },

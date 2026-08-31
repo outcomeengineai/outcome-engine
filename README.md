@@ -17,7 +17,11 @@ docs/           the two source briefs
 
 ## Quick start
 
-Node 22+ is required (`@supabase/supabase-js` no longer supports Node 20).
+Node 22+ is required, and not only because `@supabase/supabase-js` dropped
+Node 20. The test runner behaves differently: `node --test` takes a glob on
+Node 22 and a bare directory on Node 20, so running the suite on Node 20 does
+not fail loudly — it fails to run the right thing. CI pins Node 22; match it
+locally or the results are not comparable.
 
 ```bash
 npm install
