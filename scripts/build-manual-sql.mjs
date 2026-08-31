@@ -58,6 +58,10 @@ const header = `-- =============================================================
 -- editor and Run. It is all-or-nothing: if any statement fails, nothing is
 -- applied and you can fix and re-run from a clean slate.
 --
+-- FOR A FRESH DATABASE. Every statement assumes nothing exists yet, so
+-- re-running this against a populated database fails on the first CREATE.
+-- To apply a single later migration, run that file on its own instead.
+--
 -- Run apply-cron.sql afterwards, once the Vault secrets exist.
 -- =========================================================================
 
