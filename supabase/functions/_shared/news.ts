@@ -64,8 +64,22 @@ export function keywordsFor(question: string, category: string): string {
 interface Article {
   title: string;
   description?: string;
-  seendate?: string;
-  tone?: number;
+  url?: string;
+  source?: string;
+  /** ISO timestamp from the provider, when it supplies one. */
+  publishedAt?: string;
+}
+
+/**
+ * GDELT stamps articles as "20260901T143000Z" rather than ISO. Parse it, and
+ * return null rather than guessing when it is absent or malformed — a wrong
+ * published_at silently corrupts the priced-in join in section 5.
+ */
+function parseGdeltDate(v: string | undefined): string | undefined {
+  if (!v || v.length < 15) return undefined;
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(v);
+  if (!m) return undefined;
+  return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
 }
 
 async function fetchGdelt(query: string): Promise<Article[]> {
@@ -84,8 +98,15 @@ async function fetchGdelt(query: string): Promise<Article[]> {
   const text = await res.text();
   if (!text.trim().startsWith('{')) return [];
 
-  const body = JSON.parse(text) as { articles?: Array<{ title: string; seendate?: string }> };
-  return (body.articles ?? []).map((a) => ({ title: a.title, seendate: a.seendate }));
+  const body = JSON.parse(text) as {
+    articles?: Array<{ title: string; seendate?: string; url?: string; domain?: string }>;
+  };
+  return (body.articles ?? []).map((a) => ({
+    title: a.title,
+    url: a.url,
+    source: a.domain,
+    publishedAt: parseGdeltDate(a.seendate),
+  }));
 }
 
 async function fetchNewsApi(query: string, key: string): Promise<Article[]> {
@@ -102,11 +123,20 @@ async function fetchNewsApi(query: string, key: string): Promise<Article[]> {
   if (!res.ok) throw new Error(`NewsAPI ${res.status}`);
 
   const body = await res.json() as {
-    articles?: Array<{ title: string; description?: string }>;
+    articles?: Array<{
+      title: string;
+      description?: string;
+      url?: string;
+      publishedAt?: string;
+      source?: { name?: string };
+    }>;
   };
   return (body.articles ?? []).map((a) => ({
     title: a.title,
     description: a.description ?? undefined,
+    url: a.url,
+    source: a.source?.name,
+    publishedAt: a.publishedAt,
   }));
 }
 
@@ -241,6 +271,7 @@ export async function newsSignalsFor(
 
   const misses = markets.filter((m) => !signals.has(m.id)).slice(0, FETCH_BUDGET);
   const rows: Record<string, unknown>[] = [];
+  const articleRows: Record<string, unknown>[] = [];
   let fetched = 0;
   let aborted = false;
 
@@ -264,6 +295,7 @@ export async function newsSignalsFor(
         return {
           id: m.id,
           query,
+          articles,
           signal: {
             volume: articles.length,
             sentiment,
@@ -281,6 +313,19 @@ export async function newsSignalsFor(
     for (const r of results) {
       if (!r) continue;
       signals.set(r.id, r.signal);
+
+      for (const a of r.articles) {
+        if (!a.title) continue;
+        articleRows.push({
+          market_id: r.id,
+          url: a.url ?? null,
+          title: a.title,
+          source: a.source ?? null,
+          published_at: a.publishedAt ?? null,
+          matched_terms: r.query.split(/\s+/).filter(Boolean),
+        });
+      }
+
       rows.push({
         market_id: r.id,
         query: r.query,
@@ -303,6 +348,25 @@ export async function newsSignalsFor(
   if (rows.length) {
     const { error } = await db.from('news_cache').upsert(rows, { onConflict: 'market_id' });
     if (error) console.warn('news cache write failed:', error.message);
+  }
+
+  // Per-article rows, append-only (Edge Signals v2 §5, §11e).
+  //
+  // news_cache holds one aggregate row per market and OVERWRITES it, which
+  // destroys the record of what was known when. news_articles keeps each
+  // article with its own published_at and a first_seen_at that is set once
+  // and never restated — both are required by the priced-in join, and the
+  // backtest harness may only read rows timestamped before the simulated
+  // decision.
+  //
+  // ignoreDuplicates rather than an explicit onConflict target: the dedupe
+  // index is partial (WHERE url IS NOT NULL) and PostgREST cannot infer a
+  // partial index, so an ON CONFLICT target would be rejected outright.
+  if (articleRows.length) {
+    const { error } = await db
+      .from('news_articles')
+      .upsert(articleRows, { ignoreDuplicates: true });
+    if (error) console.warn('news_articles write failed:', error.message);
   }
 
   // Anything still unresolved scores neutral this pass, not zero: no news is
