@@ -96,7 +96,7 @@ fs.writeFileSync(path.join(OUT, 'apply-cron.sql'), cron);
  *
  * Update this list as migrations are applied.
  */
-const APPLIED_THROUGH = '20260823000700';
+const APPLIED_THROUGH = '20260823001100';
 
 const pending = all.filter(
   (f) => f.split('_')[0] > APPLIED_THROUGH && f !== CRON,

@@ -1,20 +1,3 @@
--- =========================================================================
--- GENERATED — do not edit. Rebuild: npm run build:manual-sql
---
--- Migrations not yet applied to the live database, in order, wrapped in one
--- transaction. Paste into the Supabase SQL editor and Run.
---
--- All-or-nothing: a failure applies nothing, so it is safe to re-run after a
--- fix. Already-applied statements would fail on the first CREATE, which is
--- why this file only contains what is genuinely outstanding — keep
--- APPLIED_THROUGH in scripts/build-manual-sql.mjs current.
--- =========================================================================
-
-begin;
-
-
--- ===== 20260823001200_v1_1_drift_stopgap.sql =======================
-
 -- ===========================================================================
 -- Model v1.1 — lower the surface threshold to 4.0.
 --
@@ -102,20 +85,3 @@ values (
       'sepP50', 0, 'sepMax', 1.1, 'markets', 394)
   )
 );
-
-
--- ===== record these migrations as applied =========================
-create schema if not exists supabase_migrations;
-
-create table if not exists supabase_migrations.schema_migrations (
-  version    text not null primary key,
-  statements text[],
-  name       text
-);
-
-insert into supabase_migrations.schema_migrations (version)
-values
-  ('20260823001200')
-on conflict (version) do nothing;
-
-commit;
