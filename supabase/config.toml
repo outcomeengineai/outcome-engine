@@ -48,6 +48,9 @@ double_confirm_changes = true
 [functions.ingest-markets]
 verify_jwt = true
 
+[functions.discover-markets]
+verify_jwt = true
+
 [functions.score-markets]
 verify_jwt = true
 
