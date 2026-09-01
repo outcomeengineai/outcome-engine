@@ -31,9 +31,6 @@ const NEUTRAL: NewsSignal = {
   fetchedAt: new Date(0).toISOString(),
 };
 
-/** In-memory cache for the life of one function invocation. */
-const memo = new Map<string, NewsSignal>();
-
 /** How stale a cached news signal may be before it is refetched. */
 const CACHE_TTL_MINUTES = 45;
 
@@ -77,7 +74,10 @@ async function fetchGdelt(query: string): Promise<Article[]> {
     `?query=${encodeURIComponent(query)}` +
     '&mode=artlist&format=json&maxrecords=50&timespan=3d&sort=datedesc';
 
-  const res = await fetch(url, { headers: { 'User-Agent': 'outcome-engine/0.1' } });
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'outcome-engine/0.1' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`GDELT ${res.status}`);
 
   // GDELT occasionally answers 200 with an HTML error page.
@@ -95,7 +95,10 @@ async function fetchNewsApi(query: string, key: string): Promise<Article[]> {
     `?q=${encodeURIComponent(query)}&from=${from}` +
     '&language=en&sortBy=publishedAt&pageSize=50';
 
-  const res = await fetch(url, { headers: { 'X-Api-Key': key } });
+  const res = await fetch(url, {
+    headers: { 'X-Api-Key': key },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`NewsAPI ${res.status}`);
 
   const body = await res.json() as {
@@ -160,77 +163,133 @@ export function scoreSentiment(articles: Article[]): { sentiment: number; matche
 // --------------------------------------------------------------------------
 
 /**
- * Fetch (or reuse) the news signal for one market.
+ * News signals for a whole scoring pass.
  *
- * Cached in `news_cache` so a scoring pass over 400 markets costs at most 400
- * upstream calls per TTL window, and usually far fewer. Any provider failure
- * degrades to a neutral signal rather than failing the scoring pass — a market
- * with no news should score on its other signals, not vanish.
+ * Three rules, learned the hard way — the naive per-market version killed the
+ * scoring function outright (no response at all, request timed out):
+ *
+ *   1. Read the cache for every market in ONE batched query, not one per
+ *      market. 400 round trips to Postgres is already too many.
+ *   2. Only fetch upstream for a BUDGETED number of cache misses per pass.
+ *      The rest get a neutral signal now and real data on a later tick — a
+ *      slightly stale news weight is worth far more than a scoring pass that
+ *      never completes.
+ *   3. Fetch those concurrently, each with its own timeout, so one slow
+ *      provider response cannot stall the pass.
+ *
+ * With a 60-market budget every five minutes, a cold cache of 400 markets is
+ * fully warm inside ~35 minutes, comfortably within the cache TTL.
  */
-export async function newsSignalFor(
+
+/** Cache misses to resolve upstream per pass. */
+const FETCH_BUDGET = 60;
+
+/** Concurrent upstream requests. */
+const CONCURRENCY = 6;
+
+/** Per-request timeout. GDELT is occasionally very slow. */
+const REQUEST_TIMEOUT_MS = 4000;
+
+export const NEUTRAL_NEWS: NewsSignal = NEUTRAL;
+
+export async function newsSignalsFor(
   db: SupabaseClient,
-  market: { id: string; question: string; category: string },
-): Promise<NewsSignal> {
-  const cached = memo.get(market.id);
-  if (cached) return cached;
+  markets: ReadonlyArray<{ id: string; question: string; category: string }>,
+): Promise<{ signals: Map<string, NewsSignal>; fetched: number; cached: number }> {
+  const signals = new Map<string, NewsSignal>();
+  if (markets.length === 0) return { signals, fetched: 0, cached: 0 };
 
+  // ---- 1. one batched cache read ----------------------------------------
   const cutoff = new Date(Date.now() - CACHE_TTL_MINUTES * 60_000).toISOString();
-  const { data: row } = await db
-    .from('news_cache')
-    .select('volume, sentiment, coverage, fetched_at')
-    .eq('market_id', market.id)
-    .gte('fetched_at', cutoff)
-    .maybeSingle();
+  const ids = markets.map((m) => m.id);
+  const CHUNK = 100;
 
-  if (row) {
-    const signal: NewsSignal = {
-      volume: row.volume,
-      sentiment: Number(row.sentiment),
-      coverage: Number(row.coverage),
-      fetchedAt: row.fetched_at,
-    };
-    memo.set(market.id, signal);
-    return signal;
-  }
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data } = await db
+      .from('news_cache')
+      .select('market_id, volume, sentiment, coverage, fetched_at')
+      .in('market_id', ids.slice(i, i + CHUNK))
+      .gte('fetched_at', cutoff);
 
-  const provider = optional('NEWS_PROVIDER', 'gdelt').toLowerCase();
-  const query = keywordsFor(market.question, market.category);
-
-  let articles: Article[] = [];
-  try {
-    if (provider === 'newsapi') {
-      const key = optional('NEWSAPI_KEY');
-      if (!key) throw new Error('NEWS_PROVIDER=newsapi but NEWSAPI_KEY is unset');
-      articles = await fetchNewsApi(query, key);
-    } else if (provider === 'gdelt') {
-      articles = await fetchGdelt(query);
-    } else {
-      memo.set(market.id, NEUTRAL);
-      return NEUTRAL;
+    for (const row of (data ?? []) as Array<{
+      market_id: string;
+      volume: number;
+      sentiment: number;
+      coverage: number;
+      fetched_at: string;
+    }>) {
+      signals.set(row.market_id, {
+        volume: row.volume,
+        sentiment: Number(row.sentiment),
+        coverage: Number(row.coverage),
+        fetchedAt: row.fetched_at,
+      });
     }
-  } catch (err) {
-    console.warn(`news fetch failed for ${market.id}:`, err instanceof Error ? err.message : err);
-    memo.set(market.id, NEUTRAL);
-    return NEUTRAL;
   }
 
-  const { sentiment, matched } = scoreSentiment(articles);
-  const signal: NewsSignal = {
-    volume: articles.length,
-    sentiment,
-    coverage: articles.length === 0 ? 0 : matched / articles.length,
-    fetchedAt: new Date().toISOString(),
-  };
+  const cached = signals.size;
 
-  await db.from('news_cache').upsert({
-    market_id: market.id,
-    query,
-    volume: signal.volume,
-    sentiment: signal.sentiment,
-    coverage: signal.coverage,
-    fetched_at: signal.fetchedAt,
-  });
+  // ---- 2. budgeted upstream fetches --------------------------------------
+  const provider = optional('NEWS_PROVIDER', 'gdelt').toLowerCase();
+  if (provider === 'none') {
+    for (const m of markets) if (!signals.has(m.id)) signals.set(m.id, NEUTRAL);
+    return { signals, fetched: 0, cached };
+  }
 
-  memo.set(market.id, signal);
-  return signal;
+  const misses = markets.filter((m) => !signals.has(m.id)).slice(0, FETCH_BUDGET);
+  const rows: Record<string, unknown>[] = [];
+  let fetched = 0;
+
+  // ---- 3. concurrently, with a timeout each ------------------------------
+  for (let i = 0; i < misses.length; i += CONCURRENCY) {
+    const slice = misses.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(slice.map(async (m) => {
+      const query = keywordsFor(m.question, m.category);
+      try {
+        const articles = provider === 'newsapi'
+          ? await fetchNewsApi(query, optional('NEWSAPI_KEY'))
+          : await fetchGdelt(query);
+        const { sentiment, matched } = scoreSentiment(articles);
+        return {
+          id: m.id,
+          query,
+          signal: {
+            volume: articles.length,
+            sentiment,
+            coverage: articles.length === 0 ? 0 : matched / articles.length,
+            fetchedAt: new Date().toISOString(),
+          } as NewsSignal,
+        };
+      } catch {
+        // A provider failure degrades this market to neutral for this pass.
+        // It must never fail the scoring run.
+        return null;
+      }
+    }));
+
+    for (const r of results) {
+      if (!r) continue;
+      signals.set(r.id, r.signal);
+      rows.push({
+        market_id: r.id,
+        query: r.query,
+        volume: r.signal.volume,
+        sentiment: r.signal.sentiment,
+        coverage: r.signal.coverage,
+        fetched_at: r.signal.fetchedAt,
+      });
+      fetched++;
+    }
+  }
+
+  if (rows.length) {
+    const { error } = await db.from('news_cache').upsert(rows, { onConflict: 'market_id' });
+    if (error) console.warn('news cache write failed:', error.message);
+  }
+
+  // Anything still unresolved scores neutral this pass, not zero: no news is
+  // not evidence against a side.
+  for (const m of markets) if (!signals.has(m.id)) signals.set(m.id, NEUTRAL);
+
+  return { signals, fetched, cached };
 }

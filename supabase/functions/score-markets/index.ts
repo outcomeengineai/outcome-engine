@@ -11,7 +11,7 @@
  */
 
 import { handler, json, readJson, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
-import { newsSignalFor, type NewsSignal } from '../_shared/news.ts';
+import { newsSignalsFor, NEUTRAL_NEWS, type NewsSignal } from '../_shared/news.ts';
 import {
   autoTags,
   baseRateScore,
@@ -198,6 +198,13 @@ Deno.serve(handler(async (req) => {
 
   const baseRates = await loadBaseRates(db);
 
+  // News for the whole pass in one budgeted, concurrent step. Fetching
+  // per-market inside the loop below is what killed this function: 400
+  // sequential upstream calls, no response at all.
+  const newsResult = disabled.includes('news')
+    ? { signals: new Map<string, NewsSignal>(), fetched: 0, cached: 0 }
+    : await newsSignalsFor(db, markets);
+
   // ---- score --------------------------------------------------------------
   const scoreRows: Record<string, unknown>[] = [];
   const tagRows: Record<string, unknown>[] = [];
@@ -213,14 +220,9 @@ Deno.serve(handler(async (req) => {
 
     const micro = microFeatures(hist);
 
-    let news: NewsSignal;
-    if (disabled.includes('news')) {
-      // Do not spend an upstream call on a signal that is about to be
-      // multiplied by a zero weight.
-      news = { volume: 0, sentiment: 0, coverage: 0, fetchedAt: ts };
-    } else {
-      news = await newsSignalFor(db, market);
-    }
+    // Already resolved above; a market with no entry scores neutral, which is
+    // not the same as scoring zero.
+    const news: NewsSignal = newsResult.signals.get(market.id) ?? NEUTRAL_NEWS;
 
     const weights = weightsForCategory(weightConfig, market.category);
     const usable = activeWeights(weights, disabled);
@@ -314,6 +316,8 @@ Deno.serve(handler(async (req) => {
     tags: tagRows.length,
     belowSurface,
     skippedNoData,
+    newsFetched: newsResult.fetched,
+    newsCached: newsResult.cached,
     ms: Date.now() - started,
   };
 
