@@ -23,6 +23,7 @@ import {
   serviceClient,
 } from '../_shared/http.ts';
 import { logActivity } from '../_shared/log.ts';
+import { selectInBatches } from '../_shared/batch.ts';
 import {
   activeWeights,
   combineSignals,
@@ -131,27 +132,45 @@ Deno.serve(handler(async (req) => {
     }
 
     // ---- snapshot history for the whole universe -------------------------
-    const { data: snaps } = await db
-      .from('market_snapshots')
-      .select('market_id, ts, price, volume, spread, open_interest, liquidity')
-      .in('market_id', universe.map((m) => m.id))
-      .gte('ts', body.rangeStart)
-      .lte('ts', body.rangeEnd)
-      .order('ts', { ascending: true });
+    const snaps = await selectInBatches<Snapshot & { market_id: string }>(
+      universe.map((m) => m.id),
+      (batch) =>
+        db
+          .from('market_snapshots')
+          .select('market_id, ts, price, volume, spread, open_interest, liquidity')
+          .in('market_id', batch)
+          .gte('ts', body.rangeStart)
+          .lte('ts', body.rangeEnd)
+          .order('ts', { ascending: true }),
+      { label: 'backtest snapshots' },
+    );
 
     const history = new Map<string, Snapshot[]>();
-    for (const s of (snaps ?? []) as Array<Snapshot & { market_id: string }>) {
+    for (const s of snaps) {
       history.set(s.market_id, [...(history.get(s.market_id) ?? []), s]);
     }
+    // Batches concatenate, so re-sort: the replay depends on chronology.
+    for (const arr of history.values()) arr.sort((a, b) => a.ts.localeCompare(b.ts));
 
     // ---- cached news, if any survives for these markets -------------------
-    const { data: newsRows } = await db
-      .from('news_cache')
-      .select('market_id, volume, sentiment, coverage, fetched_at')
-      .in('market_id', universe.map((m) => m.id));
+    const newsRows = await selectInBatches<{
+      market_id: string;
+      volume: number;
+      sentiment: number;
+      coverage: number;
+      fetched_at: string;
+    }>(
+      universe.map((m) => m.id),
+      (batch) =>
+        db
+          .from('news_cache')
+          .select('market_id, volume, sentiment, coverage, fetched_at')
+          .in('market_id', batch),
+      { label: 'backtest news' },
+    );
 
     const newsByMarket = new Map(
-      (newsRows ?? []).map((n: {
+      newsRows.map((n: {
         market_id: string;
         volume: number;
         sentiment: number;

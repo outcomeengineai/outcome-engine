@@ -18,6 +18,7 @@ import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/htt
 import { getMarket, getSettlements, KalshiError, type KalshiSettlement } from '../_shared/kalshi.ts';
 import { loadKalshiCredentials } from '../_shared/vault.ts';
 import { logActivity, notify, notifyAdmins } from '../_shared/log.ts';
+import { selectInBatches } from '../_shared/batch.ts';
 import { allocateSettlementCents, formatUsd, realizedPnlCents } from '../_shared/outcome-shared.mjs';
 
 /** Markets checked for settlement per pass. */
@@ -50,17 +51,21 @@ Deno.serve(handler(async (req) => {
 
   const held = [...new Set((heldRows ?? []).map((r: { market_id: string }) => r.market_id))];
 
-  const { data: candidates } = await db
-    .from('markets')
-    .select('id, question, close_time')
-    .is('resolved_at', null)
-    .in('id', held.length ? held : ['__none__'])
-    .limit(MARKET_BATCH);
+  const candidates = (await selectInBatches<{ id: string; question: string }>(
+    held,
+    (batch) =>
+      db
+        .from('markets')
+        .select('id, question, close_time')
+        .is('resolved_at', null)
+        .in('id', batch),
+    { label: 'settlement candidates' },
+  )).slice(0, MARKET_BATCH);
 
   let marketsResolved = 0;
   const newlyResolved: Array<{ id: string; outcome: 'YES' | 'NO' }> = [];
 
-  for (const m of (candidates ?? []) as Array<{ id: string; question: string }>) {
+  for (const m of candidates) {
     try {
       const { market } = await getMarket(m.id);
       const settled = market.status === 'settled' || market.status === 'finalized';
@@ -96,14 +101,19 @@ Deno.serve(handler(async (req) => {
   let paperResolved = 0;
 
   if (newlyResolved.length) {
-    const { data: paperTrades } = await db
-      .from('trades')
-      .select('id, user_id, market_id, mode, side, entry_price, contracts, stake_cents')
-      .eq('mode', 'paper')
-      .eq('status', 'open')
-      .in('market_id', newlyResolved.map((m) => m.id));
+    const paperTrades = await selectInBatches<OpenTrade>(
+      newlyResolved.map((m) => m.id),
+      (batch) =>
+        db
+          .from('trades')
+          .select('id, user_id, market_id, mode, side, entry_price, contracts, stake_cents')
+          .eq('mode', 'paper')
+          .eq('status', 'open')
+          .in('market_id', batch),
+      { label: 'paper trades' },
+    );
 
-    for (const t of (paperTrades ?? []) as OpenTrade[]) {
+    for (const t of paperTrades) {
       const market = newlyResolved.find((m) => m.id === t.market_id)!;
       const won = t.side === market.outcome;
       const pnl = realizedPnlCents(t.entry_price, t.contracts, won);
@@ -255,7 +265,7 @@ Deno.serve(handler(async (req) => {
 
   const result = {
     ok: true,
-    marketsChecked: candidates?.length ?? 0,
+    marketsChecked: candidates.length,
     marketsResolved,
     paperResolved,
     liveResolved,

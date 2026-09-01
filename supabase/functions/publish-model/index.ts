@@ -25,6 +25,7 @@ import {
   serviceClient,
 } from '../_shared/http.ts';
 import { logActivity, notifyMany } from '../_shared/log.ts';
+import { selectInBatches } from '../_shared/batch.ts';
 import {
   formatScore,
   retuneRecommendation,
@@ -68,13 +69,18 @@ Deno.serve(handler(async (req) => {
 
   const priorScores = new Map<string, number>();
   if (previousVersionId && trades.length) {
-    const { data: prior } = await db
-      .from('latest_scores')
-      .select('market_id, score')
-      .eq('model_version_id', previousVersionId)
-      .in('market_id', [...new Set(trades.map((t) => t.market_id))]);
+    const prior = await selectInBatches<{ market_id: string; score: number }>(
+      [...new Set(trades.map((t) => t.market_id))],
+      (batch) =>
+        db
+          .from('latest_scores')
+          .select('market_id, score')
+          .eq('model_version_id', previousVersionId)
+          .in('market_id', batch),
+      { label: 'prior scores' },
+    );
 
-    for (const s of (prior ?? []) as Array<{ market_id: string; score: number }>) {
+    for (const s of prior) {
       priorScores.set(s.market_id, Number(s.score));
     }
   }
@@ -116,15 +122,18 @@ Deno.serve(handler(async (req) => {
   }> = [];
 
   if (trades.length) {
-    const { data: fresh } = await db
-      .from('latest_scores')
-      .select('market_id, score, side')
-      .eq('model_version_id', published.id)
-      .in('market_id', [...new Set(trades.map((t) => t.market_id))]);
-
-    const newScores = new Map(
-      (fresh ?? []).map((s: { market_id: string; score: number }) => [s.market_id, Number(s.score)]),
+    const fresh = await selectInBatches<{ market_id: string; score: number }>(
+      [...new Set(trades.map((t) => t.market_id))],
+      (batch) =>
+        db
+          .from('latest_scores')
+          .select('market_id, score, side')
+          .eq('model_version_id', published.id)
+          .in('market_id', batch),
+      { label: 'fresh scores' },
     );
+
+    const newScores = new Map(fresh.map((s) => [s.market_id, Number(s.score)]));
 
     for (const trade of trades) {
       const after = newScores.get(trade.market_id);

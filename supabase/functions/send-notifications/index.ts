@@ -12,6 +12,7 @@
 
 import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
 import { optional } from '../_shared/env.ts';
+import { forEachBatch } from '../_shared/batch.ts';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -87,12 +88,8 @@ Deno.serve(handler(async (req) => {
     }
   }
 
-  if (noDevice.length) {
-    await db
-      .from('notifications')
-      .update({ sent_at: new Date().toISOString() })
-      .in('id', noDevice);
-  }
+  await forEachBatch(noDevice, (batch) =>
+    db.from('notifications').update({ sent_at: new Date().toISOString() }).in('id', batch));
 
   // ---- send ---------------------------------------------------------------
   const headers: Record<string, string> = {
@@ -149,12 +146,8 @@ Deno.serve(handler(async (req) => {
     await db.from('devices').delete().in('expo_push_token', [...deadTokens]);
   }
 
-  if (deliveredRows.size) {
-    await db
-      .from('notifications')
-      .update({ sent_at: new Date().toISOString() })
-      .in('id', [...deliveredRows]);
-  }
+  await forEachBatch([...deliveredRows], (batch) =>
+    db.from('notifications').update({ sent_at: new Date().toISOString() }).in('id', batch));
 
   return json({
     ok: true,

@@ -22,6 +22,7 @@ import {
   type Snapshot,
 } from '../_shared/signals.ts';
 import { logActivity } from '../_shared/log.ts';
+import { forEachBatch, selectInBatches } from '../_shared/batch.ts';
 import {
   activeWeights,
   combineSignals,
@@ -140,20 +141,30 @@ Deno.serve(handler(async (req) => {
 
   // ---- snapshot history, one query for the whole batch -------------------
   const since = new Date(Date.now() - HISTORY_HOURS * 3600_000).toISOString();
-  const { data: snaps, error: sErr } = await db
-    .from('market_snapshots')
-    .select('market_id, ts, price, volume, spread, open_interest, liquidity')
-    .in('market_id', ids)
-    .gte('ts', since)
-    .order('ts', { ascending: true });
-  if (sErr) throw new Error(`snapshot load failed: ${sErr.message}`);
+
+  // Batched: 400 tickers in one .in() produced a ~12KB URL, which PostgREST
+  // refused to send at all. See _shared/batch.ts.
+  const snaps = await selectInBatches<Snapshot & { market_id: string }>(
+    ids,
+    (batch) =>
+      db
+        .from('market_snapshots')
+        .select('market_id, ts, price, volume, spread, open_interest, liquidity')
+        .in('market_id', batch)
+        .gte('ts', since)
+        .order('ts', { ascending: true }),
+    { label: 'snapshot load' },
+  );
 
   const history = new Map<string, Snapshot[]>();
-  for (const s of (snaps ?? []) as Array<Snapshot & { market_id: string }>) {
+  for (const s of snaps) {
     const arr = history.get(s.market_id) ?? [];
     arr.push(s);
     history.set(s.market_id, arr);
   }
+  // selectInBatches concatenates batches, so per-market ordering is not
+  // guaranteed across them. microFeatures() depends on chronological order.
+  for (const arr of history.values()) arr.sort((a, b) => a.ts.localeCompare(b.ts));
 
   const baseRates = await loadBaseRates(db);
 
@@ -254,16 +265,9 @@ Deno.serve(handler(async (req) => {
   // would never do. Manual tags are left alone; an admin's correction must
   // survive the next scoring run.
   const scoredIds = scoreRows.map((r) => r.market_id as string);
-  if (scoredIds.length) {
-    for (let i = 0; i < scoredIds.length; i += CHUNK) {
-      const { error } = await db
-        .from('tags')
-        .delete()
-        .eq('source', 'auto')
-        .in('market_id', scoredIds.slice(i, i + CHUNK));
-      if (error) console.warn('stale tag cleanup failed:', error.message);
-    }
-  }
+  const cleanup = await forEachBatch(scoredIds, (batch) =>
+    db.from('tags').delete().eq('source', 'auto').in('market_id', batch));
+  if (cleanup.error) console.warn('stale tag cleanup failed:', cleanup.error);
 
   for (let i = 0; i < tagRows.length; i += CHUNK) {
     const { error } = await db.from('tags').insert(tagRows.slice(i, i + CHUNK));
