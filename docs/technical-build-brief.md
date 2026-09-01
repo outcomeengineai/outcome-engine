@@ -258,3 +258,60 @@ five-minute pass is millions of rows a month, and `latest_scores` is a
 `DISTINCT ON`. The retention job keeps everything recent plus the newest row per
 (market, version) forever — that row is what a historical trade's card renders
 from.
+
+---
+
+## Findings from the first live scoring runs (2026-09-01)
+
+Recorded for the v2 retune. **Not fixed in v1** — deliberately, since the
+model is being replaced rather than tuned.
+
+### Every pick came out YES
+
+First 15 scores, all side=YES. At roughly 1-in-33,000 odds under a symmetric
+model, that is structural, not chance.
+
+Observed breakdowns:
+
+```
+score 6.0  { micro: 4.2, news: 1.4, base: 0.4 }
+score 6.2  { micro: 4.2, news: 1.4, base: 0.6 }
+score 6.5  { micro: 4.2, news: 1.4, base: 0.9 }
+```
+
+Three things combine:
+
+1. **`news` is a flat 1.4 on every row** — that is `5 x 0.28`, the neutral
+   score times its weight. GDELT was unreachable, so news contributed an
+   identical constant to both sides and to every market.
+2. **`baseRateScore` is symmetric by construction.** It keys off
+   `min(price, 100 - price)`, which is identical for YES and NO, so it can
+   never distinguish the sides either.
+3. That leaves **`drift` as the only asymmetric input**. When a market has not
+   moved, YES and NO score identically and `pickSide` breaks the tie toward
+   YES.
+
+The `micro` values cluster tightly at 3.7–4.2 rather than spreading, which is
+what a saturated activity term with zero momentum looks like: high volume, no
+direction.
+
+### Why it matters beyond cosmetics
+
+The comment on `pickSide` claims a tie is harmless because "the surface
+threshold will filter it out anyway." That reasoning is wrong. Volume alone
+pushes `micro` high enough to clear 5.0, so no-edge markets surface with a
+confident-looking 6.1 and a side badge implying a directional view the model
+does not hold.
+
+### What v2 should account for
+
+- A market with no directional separation between its sides should not
+  surface, regardless of how liquid it is. Consider requiring a minimum gap
+  between the YES and NO scores rather than only a minimum absolute score.
+- If a signal can never distinguish the sides — as `base` currently cannot —
+  it inflates the score without informing the choice. Either make it
+  side-aware or account for it separately from the side decision.
+- A dead signal should not contribute a constant. Neutral-times-weight is
+  still a floor under every score; renormalising over the surviving signals
+  (as `activeWeights` already does for *disabled* signals) would be more
+  honest than treating "no data" as a mid-range opinion.
