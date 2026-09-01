@@ -202,7 +202,7 @@ Deno.serve(handler(async (req) => {
   // per-market inside the loop below is what killed this function: 400
   // sequential upstream calls, no response at all.
   const newsResult = disabled.includes('news')
-    ? { signals: new Map<string, NewsSignal>(), fetched: 0, cached: 0 }
+    ? { signals: new Map<string, NewsSignal>(), fetched: 0, cached: 0, aborted: false }
     : await newsSignalsFor(db, markets);
 
   // ---- score --------------------------------------------------------------
@@ -318,6 +318,7 @@ Deno.serve(handler(async (req) => {
     skippedNoData,
     newsFetched: newsResult.fetched,
     newsCached: newsResult.cached,
+    newsAborted: newsResult.aborted,
     ms: Date.now() - started,
   };
 

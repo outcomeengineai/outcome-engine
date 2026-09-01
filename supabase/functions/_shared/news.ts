@@ -187,17 +187,20 @@ const FETCH_BUDGET = 60;
 /** Concurrent upstream requests. */
 const CONCURRENCY = 6;
 
-/** Per-request timeout. GDELT is occasionally very slow. */
-const REQUEST_TIMEOUT_MS = 4000;
+/**
+ * Per-request timeout. Deliberately short: the news signal carries a 0.28
+ * weight in model v1, so it is never worth making the whole pass wait.
+ */
+const REQUEST_TIMEOUT_MS = 2500;
 
 export const NEUTRAL_NEWS: NewsSignal = NEUTRAL;
 
 export async function newsSignalsFor(
   db: SupabaseClient,
   markets: ReadonlyArray<{ id: string; question: string; category: string }>,
-): Promise<{ signals: Map<string, NewsSignal>; fetched: number; cached: number }> {
+): Promise<{ signals: Map<string, NewsSignal>; fetched: number; cached: number; aborted: boolean }> {
   const signals = new Map<string, NewsSignal>();
-  if (markets.length === 0) return { signals, fetched: 0, cached: 0 };
+  if (markets.length === 0) return { signals, fetched: 0, cached: 0, aborted: false };
 
   // ---- 1. one batched cache read ----------------------------------------
   const cutoff = new Date(Date.now() - CACHE_TTL_MINUTES * 60_000).toISOString();
@@ -233,14 +236,22 @@ export async function newsSignalsFor(
   const provider = optional('NEWS_PROVIDER', 'gdelt').toLowerCase();
   if (provider === 'none') {
     for (const m of markets) if (!signals.has(m.id)) signals.set(m.id, NEUTRAL);
-    return { signals, fetched: 0, cached };
+    return { signals, fetched: 0, cached, aborted: false };
   }
 
   const misses = markets.filter((m) => !signals.has(m.id)).slice(0, FETCH_BUDGET);
   const rows: Record<string, unknown>[] = [];
   let fetched = 0;
+  let aborted = false;
 
-  // ---- 3. concurrently, with a timeout each ------------------------------
+  // ---- 3. concurrently, with a timeout each, and a circuit breaker -------
+  //
+  // When the provider is down, every request burns its full timeout. At the
+  // full budget that is ten waves of dead air — observed as a 41-second
+  // scoring pass that fetched nothing. So: if the first wave comes back with
+  // nothing at all, treat the provider as unavailable and give up for this
+  // pass. Cost drops from ~40s to ~2.5s, and it heals by itself the moment a
+  // first wave succeeds again.
   for (let i = 0; i < misses.length; i += CONCURRENCY) {
     const slice = misses.slice(i, i + CONCURRENCY);
     const results = await Promise.all(slice.map(async (m) => {
@@ -280,6 +291,13 @@ export async function newsSignalsFor(
       });
       fetched++;
     }
+
+    if (fetched === 0) {
+      // A whole wave, nothing back. The provider is not answering.
+      console.warn(`[news] ${provider} returned nothing on the first wave — skipping for this pass`);
+      aborted = true;
+      break;
+    }
   }
 
   if (rows.length) {
@@ -291,5 +309,5 @@ export async function newsSignalsFor(
   // not evidence against a side.
   for (const m of markets) if (!signals.has(m.id)) signals.set(m.id, NEUTRAL);
 
-  return { signals, fetched, cached };
+  return { signals, fetched, cached, aborted };
 }
