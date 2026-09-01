@@ -78,17 +78,34 @@ export async function requireAdmin(req: Request, db: SupabaseClient) {
 }
 
 /**
- * Scheduled functions accept either the cron shared secret or an admin
- * session, so an operator can trigger a job by hand from the dashboard.
+ * Who may invoke a scheduled function.
  *
- * If CRON_SECRET is unset the header check is skipped — acceptable only
- * because these functions still sit behind Supabase's own JWT gate.
+ * Three ways in, checked cheapest first:
+ *
+ *   1. The bearer token IS the service role key. pg_cron already sends this
+ *      in the Authorization header, so machine invocation needs no second
+ *      credential. This is not a weakening: anyone holding the service role
+ *      key can already do anything to the database directly, so requiring an
+ *      additional shared secret alongside it protected nothing while adding
+ *      a value that has to be kept in sync in two places — and drifted.
+ *
+ *   2. The x-cron-secret header matches CRON_SECRET. Kept for deployments
+ *      that prefer a narrower credential than the service role key.
+ *
+ *   3. An admin session, so an operator can trigger a job by hand.
  */
 export async function requireCronOrAdmin(req: Request, db: SupabaseClient) {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  if (token && timingSafeEqual(token, SERVICE_ROLE_KEY())) {
+    return { via: 'service_role' as const };
+  }
+
   const expected = CRON_SECRET();
   const provided = req.headers.get('x-cron-secret') ?? '';
-  if (expected && provided && timingSafeEqual(expected, provided)) return { via: 'cron' as const };
-  if (!expected) return { via: 'cron' as const };
+  if (expected && provided && timingSafeEqual(expected, provided)) {
+    return { via: 'cron' as const };
+  }
+
   await requireAdmin(req, db);
   return { via: 'admin' as const };
 }
