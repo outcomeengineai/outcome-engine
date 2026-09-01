@@ -80,6 +80,24 @@ jobs:
             exit 0
           fi
           REGION="${DB_REGION:-us-west-2}"
+
+          # Diagnose the password WITHOUT revealing it. A secret pasted with a
+          # trailing newline is the classic invisible 28P01 — GitHub preserves
+          # whitespace exactly as entered, and nothing downstream complains.
+          RAW="$DB_PASSWORD"
+          TRIMMED=$(printf '%s' "$RAW" | tr -d '[:space:]')
+          if [ -z "$TRIMMED" ]; then
+            echo "SUPABASE_DB_PASSWORD is empty or whitespace only."
+            exit 1
+          fi
+          if [ "$TRIMMED" != "$RAW" ]; then
+            echo "NOTE: the stored password had surrounding whitespace. Trimmed."
+            echo "      Re-save the secret without a trailing newline."
+          fi
+          echo "::add-mask::$TRIMMED"
+          DB_PASSWORD="$TRIMMED"
+          export DB_PASSWORD
+
           ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.env.DB_PASSWORD||""))')
           echo "::add-mask::$ENC"
           URL="postgresql://postgres.${PROJECT_REF}:${ENC}@aws-0-${REGION}.pooler.supabase.com:5432/postgres"
