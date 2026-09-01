@@ -212,6 +212,16 @@ Deno.serve(handler(async (req) => {
 
   let skippedNoData = 0;
   let belowSurface = 0;
+  let noDirection = 0;
+
+  /**
+   * Minimum gap between the two sides' scores before a market may surface.
+   * Tunable per model version; 0.5 is the smallest gap visible at the one
+   * decimal place scores are stored and displayed at.
+   */
+  const minSeparation = Number(
+    (thresholds as { minSideSeparation?: number }).minSideSeparation ?? 0.5,
+  );
 
   for (const market of markets) {
     const hist = history.get(market.id) ?? [];
@@ -257,6 +267,24 @@ Deno.serve(handler(async (req) => {
     // deliberately no third "no edge" state to render.
     if (!surfaces(winner.score, thresholds.surface ?? 5)) {
       belowSurface++;
+      continue;
+    }
+
+    // The score must also express a DIRECTION, not just an opinion that the
+    // market is interesting.
+    //
+    // news is neutral for both sides when there is no coverage, and
+    // baseRateScore keys off min(price, 100 - price) so it is symmetric by
+    // construction. Drift is therefore the only input that can separate the
+    // sides — and when a market has not moved, both sides score identically
+    // and pickSide breaks the tie toward YES. Every one of the first 15 live
+    // scores came out YES that way.
+    //
+    // Surfacing a coin-flip with a side badge implies a view the model does
+    // not hold, so require real separation before showing one.
+    const separation = Math.abs(yes.score - no.score);
+    if (separation < minSeparation) {
+      noDirection++;
       continue;
     }
 
@@ -315,6 +343,7 @@ Deno.serve(handler(async (req) => {
     scored: scoreRows.length,
     tags: tagRows.length,
     belowSurface,
+    noDirection,
     skippedNoData,
     newsFetched: newsResult.fetched,
     newsCached: newsResult.cached,

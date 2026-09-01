@@ -41,6 +41,12 @@ function toScore(unit: number): number {
 // Microstructure
 // --------------------------------------------------------------------------
 
+/**
+ * Intervals that must show real volume before a volume RATIO means anything.
+ * Below this there is no baseline to compare against, only noise.
+ */
+const MIN_ACTIVE_INTERVALS = 3;
+
 export interface MicroFeatures {
   /** Cents moved over the window, signed toward YES. */
   drift: number;
@@ -73,9 +79,18 @@ export function microFeatures(history: Snapshot[]): MicroFeatures {
   const recentAvg = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
   const median = deltas.length ? [...deltas].sort((a, b) => a - b)[Math.floor(deltas.length / 2)]! : 0;
 
+  // A market that trades in only a couple of intervals has a median delta of
+  // zero. The previous fallback asserted 3x in that case — which is exactly
+  // the value that saturates the activity term — so the LEAST traded markets
+  // scored as though they had a volume spike, and flat untraded markets
+  // surfaced at ~6.0. Absence of trading is not evidence of unusual trading:
+  // without enough active intervals to form a baseline, the ratio is 1.
+  const activeIntervals = deltas.filter((d) => d > 0).length;
+  const hasBaseline = median > 0 && activeIntervals >= MIN_ACTIVE_INTERVALS;
+
   return {
     drift: last.price - first.price,
-    volumeRatio: median > 0 ? recentAvg / median : recentAvg > 0 ? 3 : 1,
+    volumeRatio: hasBaseline ? recentAvg / median : 1,
     spread: last.spread,
     openInterest: last.open_interest,
     samples: sorted.length,
