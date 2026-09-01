@@ -56,11 +56,60 @@ jobs:
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
 
-      # The first run creates every table, policy and function. Expect this
-      # step to be where any SQL problem surfaces — nothing in supabase/ has
-      # ever been executed against a real Postgres.
+      # Build an explicit SESSION-POOLER connection string rather than letting
+      # the CLI resolve one.
+      #
+      # Two failure modes this removes. The pooler on port 5432 is session
+      # mode, which is what migrations need — the CLI can land on the direct
+      # host, which is IPv6-only from some runners. And the password is
+      # URL-encoded here: a generated password containing @ : / ? or # silently
+      # truncates a connection string and surfaces as "password authentication
+      # failed", which is indistinguishable from actually having it wrong.
+      #
+      # SUPABASE_DB_URL, if set, overrides all of this.
+      - name: Build database URL
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DB_URL_OVERRIDE: ${{ secrets.SUPABASE_DB_URL }}
+          DB_REGION: ${{ secrets.SUPABASE_DB_REGION }}
+        run: |
+          if [ -n "$DB_URL_OVERRIDE" ]; then
+            echo "::add-mask::$DB_URL_OVERRIDE"
+            echo "DB_URL=$DB_URL_OVERRIDE" >> $GITHUB_ENV
+            echo "Using SUPABASE_DB_URL override."
+            exit 0
+          fi
+          REGION="${DB_REGION:-us-west-2}"
+          ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.env.DB_PASSWORD||""))')
+          echo "::add-mask::$ENC"
+          URL="postgresql://postgres.${PROJECT_REF}:${ENC}@aws-0-${REGION}.pooler.supabase.com:5432/postgres"
+          echo "::add-mask::$URL"
+          echo "DB_URL=$URL" >> $GITHUB_ENV
+          echo "Session pooler, region ${REGION}, user postgres.${PROJECT_REF}"
+          if [ "$ENC" != "$DB_PASSWORD" ]; then
+            echo "NOTE: the password contains characters that required URL encoding."
+            echo "That is handled, but it is also the classic cause of a bogus 28P01."
+          fi
+
+      # Separate from the push so a connection problem is distinguishable from
+      # a SQL problem. Previously both surfaced as one opaque failure.
+      - name: Check database connectivity
+        run: |
+          if psql "$DB_URL" -tAc 'select 1' >/dev/null 2>/tmp/pgerr; then
+            echo "Connected."
+          else
+            echo "Could not connect. Postgres said:"
+            sed -E 's/postgresql:\/\/[^ ]*/<redacted>/g' /tmp/pgerr
+            echo ""
+            echo "28P01 means the password is wrong. Reset it at"
+            echo "  Project Settings -> Database -> Reset database password"
+            echo "and update the SUPABASE_DB_PASSWORD repo secret."
+            exit 1
+          fi
+
+      # Where any SQL problem surfaces.
       - name: Apply migrations
-        run: supabase db push
+        run: supabase db push --db-url "$DB_URL"
 
       # No build step: the shared fee/score bundle at
       # supabase/functions/_shared/outcome-shared.mjs is committed precisely so

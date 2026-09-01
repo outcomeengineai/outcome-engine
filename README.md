@@ -119,6 +119,35 @@ lives here instead.
 Environment variables go in Vercel's dashboard, not a file:
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Both public.
 
+### v1's directional signal is drift-only
+
+Expect low surfaced counts, and do not read that as a broken pipeline.
+
+A market only surfaces when the two sides' scores differ by at least
+`thresholds.minSideSeparation`. Of the three v1 signals, only one can create
+that difference:
+
+| signal | can it distinguish YES from NO? |
+|---|---|
+| `micro` | **yes** — via price drift over the window |
+| `news` | no — neutral for both sides without coverage, and identical for both when there is coverage of unknown direction |
+| `base` | no — keys off `min(price, 100 - price)`, symmetric by construction |
+
+So v1 can only form a directional view on markets whose **price has actually
+moved**. A market that is liquid, tight and interesting but flat produces a
+coin flip, and a coin flip with a side badge would imply a view the model does
+not hold. Those markets are counted as `noDirection` in the scoring response
+rather than surfaced.
+
+This is why the first fifteen live scores were all YES: with drift at zero the
+sides tied exactly and the tie-break went one way every time. Fixed in
+20260823001000, but the underlying limitation is structural, not a bug.
+
+Anchors (Edge Signals v2, section 1) are what removes it. An NWS forecast of
+78% against a market price of 64c is a directional edge that needs no price
+movement at all, so anchored categories will surface on day one instead of
+waiting for momentum to build.
+
 ## The five things that matter
 
 **1. Money is integer cents, everywhere.** Contract prices are whole cents 1–99
