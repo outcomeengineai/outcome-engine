@@ -214,6 +214,13 @@ Deno.serve(handler(async (req) => {
   let belowSurface = 0;
   let noDirection = 0;
 
+  // Every winning-side score, surfaced or not. "belowSurface: 394" says
+  // nothing about whether those markets sit at 4.9 or 2.1, which is the
+  // difference between a threshold that is slightly off and scoring that is
+  // broken. Report the distribution so the threshold can be set from evidence.
+  const allScores: number[] = [];
+  const allSeparations: number[] = [];
+
   /**
    * Minimum gap between the two sides' scores before a market may surface.
    * Tunable per model version; 0.5 is the smallest gap visible at the one
@@ -262,6 +269,9 @@ Deno.serve(handler(async (req) => {
     const no = evaluate('NO');
     const side = pickSide(yes.score, no.score);
     const winner = side === 'YES' ? yes : no;
+
+    allScores.push(winner.score);
+    allSeparations.push(Math.abs(yes.score - no.score));
 
     // A market that is weak on BOTH sides simply does not surface. There is
     // deliberately no third "no edge" state to render.
@@ -334,6 +344,12 @@ Deno.serve(handler(async (req) => {
     if (error) console.warn('tag insert failed:', error.message);
   }
 
+  const pct = (xs: number[], p: number) => {
+    if (xs.length === 0) return null;
+    const sorted = [...xs].sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]!;
+  };
+
   const result = {
     ok: true,
     modelVersion: version.version_label,
@@ -345,6 +361,12 @@ Deno.serve(handler(async (req) => {
     belowSurface,
     noDirection,
     skippedNoData,
+    // What the scores actually look like, so thresholds can be tuned on data.
+    scoreP50: pct(allScores, 0.5),
+    scoreP90: pct(allScores, 0.9),
+    scoreMax: allScores.length ? Math.max(...allScores) : null,
+    sepP50: pct(allSeparations, 0.5),
+    sepMax: allSeparations.length ? Math.max(...allSeparations) : null,
     newsFetched: newsResult.fetched,
     newsCached: newsResult.cached,
     newsAborted: newsResult.aborted,
