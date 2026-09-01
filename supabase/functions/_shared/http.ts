@@ -96,7 +96,7 @@ export async function requireAdmin(req: Request, db: SupabaseClient) {
  */
 export async function requireCronOrAdmin(req: Request, db: SupabaseClient) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
-  if (token && timingSafeEqual(token, SERVICE_ROLE_KEY())) {
+  if (token && isServiceRoleToken(token)) {
     return { via: 'service_role' as const };
   }
 
@@ -108,6 +108,44 @@ export async function requireCronOrAdmin(req: Request, db: SupabaseClient) {
 
   await requireAdmin(req, db);
   return { via: 'admin' as const };
+}
+
+/**
+ * Does this bearer token carry service-role authority for this project?
+ *
+ * SECURITY: this reads the JWT's claims WITHOUT verifying its signature, and
+ * that is only sound because Supabase's gateway already did. Every function
+ * using this has `verify_jwt = true` in supabase/config.toml, so the platform
+ * validates the signature against the project's JWT secret before the function
+ * is invoked at all. A token that reaches this code is already known-authentic.
+ * If a function is ever switched to verify_jwt = false, this check becomes
+ * forgeable and must not be relied on.
+ *
+ * Why not just compare against SUPABASE_SERVICE_ROLE_KEY? Because the two
+ * sides can hold different REPRESENTATIONS of the same authority — a legacy
+ * 219-character JWT versus the newer sb_secret_ format — so string equality
+ * fails even when both are valid. That mismatch is what kept every scheduled
+ * call returning 401 while pg_cron reported success.
+ */
+function isServiceRoleToken(token: string): boolean {
+  // Exact match first: cheapest, and correct whenever both sides agree on form.
+  try {
+    if (timingSafeEqual(token, SERVICE_ROLE_KEY())) return true;
+  } catch {
+    // SUPABASE_SERVICE_ROLE_KEY unset in this environment; fall through.
+  }
+
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+
+  try {
+    let b64 = parts[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const payload = JSON.parse(atob(b64)) as { role?: string };
+    return payload?.role === 'service_role';
+  } catch {
+    return false;
+  }
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
