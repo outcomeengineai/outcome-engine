@@ -292,6 +292,36 @@ export async function listAllEventsWithMarkets(
   return out;
 }
 
+/**
+ * Fetch an EXACT set of markets by ticker.
+ *
+ * This is what makes the discovery/pricing split affordable. Pricing a chosen
+ * universe by paging the whole book costs ~60 requests; asking for the tickers
+ * we actually want costs one request per batch.
+ *
+ * Batch size is bounded by URL length, not by the API: tickers average ~23
+ * characters, so 150 lands around 3.7KB — comfortably inside the ~8KB limit
+ * that silently broke the snapshot query earlier. Measured up to 200 (5KB,
+ * 149ms) without complaint; 150 keeps margin.
+ */
+export const TICKER_BATCH = 150;
+
+export async function getMarketsByTickers(
+  tickers: readonly string[],
+): Promise<KalshiMarket[]> {
+  const out: KalshiMarket[] = [];
+
+  for (let i = 0; i < tickers.length; i += TICKER_BATCH) {
+    const batch = tickers.slice(i, i + TICKER_BATCH);
+    const res = await kalshiRequest<{ markets?: KalshiMarket[] }>('/markets', {
+      query: { tickers: batch.join(',') },
+    });
+    out.push(...(res.markets ?? []));
+  }
+
+  return out;
+}
+
 export async function getMarket(ticker: string): Promise<{ market: KalshiMarket }> {
   return await kalshiRequest(`/markets/${encodeURIComponent(ticker)}`);
 }

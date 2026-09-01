@@ -1,46 +1,43 @@
 /**
- * Market ingestion — scheduled, every 5 minutes.
+ * Market pricing — scheduled per cadence tier.
  *
- * Polls Kalshi's PUBLIC endpoints, so it uses no credentials and costs nothing
- * against any member's rate limit. Every user's view fans out from these shared
- * rows; nothing here is per-user, and it must stay that way or twenty members
- * become twenty times the API load for identical data.
+ * Prices a universe that discover-markets has already chosen, rather than
+ * discovering and pricing in one pass. The split matters because the two have
+ * opposite economics: discovery must see everything but rarely; pricing must
+ * be frequent but only for markets worth polling that often.
  *
- * Reads EVENTS with nested markets rather than the flat /markets listing. That
- * listing is dominated by multi-variate-event shards carrying no order book —
- * 1,200 consecutive results with every price at zero — and it does not return
- * a category at all. Events carry the tradeable contracts and the category.
+ * Doing both together is what produced a platform scoring contracts resolving
+ * in 2029 — it took the first 300 events Kalshi returned, which covered 2.7%
+ * of the book at a median horizon of 1,217 days.
+ *
+ *   fast     every 5 minutes  — near-dated, two-sided book
+ *   slow     hourly           — long-dated but still tracked, so tail entries
+ *                               stay visible and accumulate history
+ *   archive  daily            — very long-dated; history only
+ *
+ * Uses exact-set ticker fetching, so pricing 800 markets is ~6 requests rather
+ * than the ~60 a full sweep would cost.
  */
 
 import { handler, json, readJson, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
 import {
   dollarsToCents,
   fixedToInt,
+  getMarketsByTickers,
   KalshiError,
-  listAllEventsWithMarkets,
-  type KalshiEvent,
   type KalshiMarket,
 } from '../_shared/kalshi.ts';
 import { logActivity } from '../_shared/log.ts';
+import { forEachBatch } from '../_shared/batch.ts';
 
-/**
- * Kalshi's own categories, mapped onto the shorter names the strategy screen
- * offers per-category weight overrides for. Anything unrecognised passes
- * through unchanged rather than being flattened into 'Other', so a new Kalshi
- * category shows up in the admin UI instead of disappearing.
- */
-const CATEGORY_MAP: Record<string, string> = {
-  'Climate and Weather': 'Weather',
-  'Science and Technology': 'Science',
-  'Elections': 'Politics',
-  'Companies': 'Financials',
+type Tier = 'fast' | 'slow' | 'archive';
+
+/** Ceiling per pass, so one tier cannot run the function to its time limit. */
+const MAX_PER_PASS: Record<Tier, number> = {
+  fast: 1200,
+  slow: 3000,
+  archive: 6000,
 };
-
-function normalizeCategory(event: KalshiEvent): string {
-  const raw = (event.category ?? '').trim();
-  if (!raw) return 'Other';
-  return CATEGORY_MAP[raw] ?? raw;
-}
 
 /**
  * Best available YES price, in whole cents.
@@ -48,9 +45,6 @@ function normalizeCategory(event: KalshiEvent): string {
  * Prefers the midpoint of the book over last price: last price is whatever
  * happened to trade most recently, which on a thin market can be minutes stale
  * and several cents from what a member would actually pay now.
- *
- * Returns null when there is no price at all — a real market with no book yet,
- * which is worth recording as a market but has nothing honest to snapshot.
  */
 function yesPriceCents(m: KalshiMarket): number | null {
   const bid = dollarsToCents(m.yes_bid_dollars);
@@ -73,95 +67,84 @@ function spreadCents(m: KalshiMarket): number {
 Deno.serve(handler(async (req) => {
   const db = serviceClient();
   await requireCronOrAdmin(req, db);
-
-  const body = await readJson<{ maxEvents?: number }>(req);
   const started = Date.now();
 
-  const { data: maxSetting } = await db
-    .from('platform_settings')
-    .select('value')
-    .eq('key', 'ingest_max_events')
-    .maybeSingle();
+  const body = await readJson<{ tier?: Tier; limit?: number }>(req);
+  const tier: Tier = body.tier ?? 'fast';
+  const cap = Math.min(body.limit ?? MAX_PER_PASS[tier], MAX_PER_PASS[tier]);
 
-  const maxEvents = body.maxEvents ?? Number(maxSetting?.value ?? 300);
+  // ---- the universe for this tier ----------------------------------------
+  // Oldest-priced first, so a cap degrades into a rotation rather than
+  // permanently starving the tail of the tier.
+  const { data: rows, error: mErr } = await db
+    .from('markets')
+    .select('id')
+    .eq('cadence_tier', tier)
+    .is('resolved_at', null)
+    .order('last_priced_at', { ascending: true, nullsFirst: true })
+    .limit(cap);
 
-  let events: KalshiEvent[];
+  if (mErr) throw new Error(`universe load failed: ${mErr.message}`);
+  const tickers = (rows ?? []).map((r: { id: string }) => r.id);
+
+  if (tickers.length === 0) {
+    return json({
+      ok: true,
+      tier,
+      markets: 0,
+      snapshots: 0,
+      reason: 'no markets in this tier — has discover-markets run?',
+    });
+  }
+
+  // ---- price them ---------------------------------------------------------
+  let fetched: KalshiMarket[];
   try {
-    events = await listAllEventsWithMarkets('open', maxEvents);
+    fetched = await getMarketsByTickers(tickers);
   } catch (err) {
-    // A rate limit is transient, not worth alarming on — the next tick in five
-    // minutes picks up where this left off.
     const rateLimited = err instanceof KalshiError && err.status === 429;
     await logActivity(db, {
       type: rateLimited ? 'ingest.rate_limited' : 'ingest.failed',
-      detail: err instanceof Error ? err.message : String(err),
+      detail: `tier ${tier}: ${err instanceof Error ? err.message : String(err)}`,
     });
     return json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
+      { ok: false, tier, error: err instanceof Error ? err.message : String(err) },
       rateLimited ? 429 : 502,
     );
   }
 
-  const marketRows: Record<string, unknown>[] = [];
-  const snapshotRows: Record<string, unknown>[] = [];
   const now = new Date().toISOString();
-
-  let seen = 0;
+  const snapshotRows: Record<string, unknown>[] = [];
+  const resolvedNow: string[] = [];
   let skippedNoPrice = 0;
-  let skippedShard = 0;
 
-  for (const event of events) {
-    const category = normalizeCategory(event);
+  for (const m of fetched) {
+    if (!m.ticker) continue;
 
-    for (const m of event.markets ?? []) {
-      if (!m.ticker) continue;
-      seen++;
-
-      // Multi-variate-event shards are synthetic legs with no book. They exist
-      // in the API but nobody can trade them, so they would only ever dilute
-      // the desk.
-      if (m.mve_collection_ticker) {
-        skippedShard++;
-        continue;
-      }
-
-      marketRows.push({
-        id: m.ticker,
-        event_ticker: m.event_ticker ?? event.event_ticker,
-        question: m.title ?? event.title ?? m.ticker,
-        category,
-        close_time: m.close_time ?? null,
-        status: m.status ?? null,
-        updated_at: now,
-      });
-
-      const price = yesPriceCents(m);
-      if (price === null) {
-        skippedNoPrice++;
-        continue;
-      }
-
-      snapshotRows.push({
-        market_id: m.ticker,
-        ts: now,
-        price,
-        volume: fixedToInt(m.volume_fp),
-        spread: spreadCents(m),
-        open_interest: fixedToInt(m.open_interest_fp),
-        liquidity: dollarsToCents(m.liquidity_dollars),
-      });
+    // A market that settled between discovery passes should stop being priced.
+    if (m.status === 'settled' || m.status === 'finalized') {
+      resolvedNow.push(m.ticker);
+      continue;
     }
+
+    const price = yesPriceCents(m);
+    if (price === null) {
+      skippedNoPrice++;
+      continue;
+    }
+
+    snapshotRows.push({
+      market_id: m.ticker,
+      ts: now,
+      price,
+      volume: fixedToInt(m.volume_fp),
+      spread: spreadCents(m),
+      open_interest: fixedToInt(m.open_interest_fp),
+      liquidity: dollarsToCents(m.liquidity_dollars),
+    });
   }
 
-  // Markets first — snapshots carry an FK to them.
   const CHUNK = 500;
-  for (let i = 0; i < marketRows.length; i += CHUNK) {
-    const { error } = await db
-      .from('markets')
-      .upsert(marketRows.slice(i, i + CHUNK), { onConflict: 'id' });
-    if (error) throw new Error(`market upsert failed: ${error.message}`);
-  }
-
   for (let i = 0; i < snapshotRows.length; i += CHUNK) {
     const { error } = await db
       .from('market_snapshots')
@@ -169,22 +152,37 @@ Deno.serve(handler(async (req) => {
     if (error) throw new Error(`snapshot insert failed: ${error.message}`);
   }
 
+  // Mark what we priced, so the next pass rotates rather than repeating.
+  const priced = snapshotRows.map((r) => r.market_id as string);
+  const touch = await forEachBatch(priced, (batch) =>
+    db.from('markets').update({ last_priced_at: now }).in('id', batch));
+  if (touch.error) console.warn('last_priced_at update failed:', touch.error);
+
+  // Settled markets leave the priced universe; sync-resolutions handles the
+  // trades. Membership is closed so the point-in-time record stays honest.
+  if (resolvedNow.length) {
+    await forEachBatch(resolvedNow, (batch) =>
+      db.from('markets').update({ cadence_tier: 'excluded', tier_reason: 'settled' }).in('id', batch));
+    await forEachBatch(resolvedNow, (batch) =>
+      db.from('universe_membership').update({ left_at: now }).is('left_at', null).in('market_id', batch));
+  }
+
   const result = {
     ok: true,
-    events: events.length,
-    marketsSeen: seen,
-    markets: marketRows.length,
+    tier,
+    requested: tickers.length,
+    returned: fetched.length,
     snapshots: snapshotRows.length,
-    skippedShard,
     skippedNoPrice,
+    settled: resolvedNow.length,
     ms: Date.now() - started,
   };
 
   await logActivity(db, {
     type: 'ingest.completed',
     detail:
-      `${result.snapshots} snapshots across ${result.markets} markets ` +
-      `from ${result.events} events (${skippedShard} shards, ${skippedNoPrice} unpriced)`,
+      `${tier}: ${result.snapshots} snapshots of ${result.requested} requested ` +
+      `(${skippedNoPrice} unpriced, ${resolvedNow.length} settled)`,
     metadata: result,
   });
 
