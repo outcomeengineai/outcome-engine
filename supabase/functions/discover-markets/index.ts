@@ -1,19 +1,24 @@
 /**
- * Market discovery — scheduled, hourly.
+ * Market discovery — scheduled, chunked.
  *
- * Split out from ingestion because the two jobs have opposite economics.
- * Discovery needs to see EVERYTHING (deep-paging the whole book, ~11s and 60
- * requests) but only needs to run occasionally. Pricing needs to run every few
- * minutes but only for markets worth pricing that often.
+ * Sees the whole Kalshi book and records what each market IS, so that tier
+ * assignment (which decides what gets priced, and how often) has the full
+ * field to work from.
  *
- * Doing both in one job is what produced a platform that scored contracts
- * resolving in 2029: taking the first 300 events Kalshi returned covered 2.7%
- * of the book with a median horizon of 1,217 days, and missed 713 of the 718
- * weather markets outright.
+ * CHUNKED, because the first version was not. It paged the entire book into an
+ * array and then classified it: 235 MB of JSON and ~110,000 market objects
+ * held at once, against a 256 MB worker limit. It died with
+ * WORKER_RESOURCE_LIMIT before writing a single row. Wall clock was never the
+ * problem (~10s for the whole sweep) — retention was.
  *
- * This job assigns every market a family and a cadence tier, and records each
- * transition so a backtest can reconstruct what the platform could see at any
- * past moment.
+ * So this never holds more than one page. Each page is projected to compact
+ * rows, written, and dropped. A cursor persists between invocations, so a
+ * sweep spans several runs and resumes exactly where it stopped — restarting
+ * would re-page the head of the book forever and never reach the tail.
+ *
+ * Ranking and caps deliberately live in SQL (assign_cadence_tiers). Choosing
+ * the top N of 110,000 markets is a sort; doing it here would mean holding
+ * every candidate in memory purely to order them, which is the bug above.
  */
 
 import { handler, json, readJson, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
@@ -26,41 +31,29 @@ import {
   type KalshiMarket,
 } from '../_shared/kalshi.ts';
 import { logActivity } from '../_shared/log.ts';
-import { forEachBatch, selectInBatches } from '../_shared/batch.ts';
-
-/**
- * Pages of 200 events. Measured at ~185ms each with no throttling over a
- * 20-request burst, so a full sweep is ~11s. Capped rather than unbounded so a
- * pathological cursor cannot run the function to its wall-clock limit.
- */
-const MAX_PAGES = 80;
 
 type Family = 'standard' | 'multi_stage' | 'mve_shard';
-type Tier = 'fast' | 'slow' | 'archive' | 'excluded';
+
+/**
+ * Pages per invocation.
+ *
+ * Peak memory is one page (~3 MB of JSON), since each is released before the
+ * next is fetched. Ten leaves a wide margin under the worker limit and
+ * finishes a full ~80-page sweep in eight runs — under 40 minutes at the
+ * 5-minute cadence.
+ */
+const PAGES_PER_RUN = 10;
+
+/** Safety stop: a cursor that never terminates must not sweep forever. */
+const MAX_SWEEP_PAGES = 150;
 
 interface Selection {
-  fastHorizonDays: number;
-  slowHorizonDays: number;
-  maxSpreadCents: number;
-  requireTwoSidedBook: boolean;
-  fastCap: number;
-  slowCap: number;
-  archiveCap: number;
   anchorableCategories: string[];
-  anchorRankBoost: number;
   multiStageMinLegs: number;
 }
 
 const DEFAULTS: Selection = {
-  fastHorizonDays: 14,
-  slowHorizonDays: 365,
-  maxSpreadCents: 12,
-  requireTwoSidedBook: true,
-  fastCap: 800,
-  slowCap: 2500,
-  archiveCap: 5000,
   anchorableCategories: ['Weather', 'Economics'],
-  anchorRankBoost: 0.25,
   multiStageMinLegs: 3,
 };
 
@@ -96,83 +89,29 @@ function classifyFamily(event: KalshiEvent, market: KalshiMarket, sel: Selection
   return 'standard';
 }
 
-function daysUntil(closeTime: string | undefined): number | null {
-  if (!closeTime) return null;
-  const ms = new Date(closeTime).getTime() - Date.now();
-  return Number.isFinite(ms) ? ms / 86_400_000 : null;
+interface State {
+  cursor: string | null;
+  pages_done: number;
+  markets_seen: number;
+  sweep_started_at: string | null;
 }
 
-interface Candidate {
-  id: string;
-  eventTicker: string;
-  question: string;
-  category: string;
-  closeTime: string | null;
-  status: string | null;
-  family: Family;
-  anchorable: boolean;
-  horizonDays: number | null;
-  spread: number;
-  volume: number;
-  twoSided: boolean;
-  rank: number;
-  tier: Tier;
-  reason: string;
-}
-
-/**
- * Provisional tier from the market's own properties, before caps are applied.
- *
- * Horizon drives it, because horizon is what determines whether a market can
- * move on a timescale the platform can observe. Book quality gates the FAST
- * tier only: a wide-spread market is still worth tracking hourly, it is just
- * not worth polling every five minutes.
- */
-function provisionalTier(c: Omit<Candidate, 'tier' | 'reason' | 'rank'>, sel: Selection): {
-  tier: Tier;
-  reason: string;
-} {
-  if (c.family === 'mve_shard') return { tier: 'excluded', reason: 'mve shard, no order book' };
-  if (c.horizonDays === null) return { tier: 'slow', reason: 'no close time' };
-  if (c.horizonDays < 0) return { tier: 'excluded', reason: 'past close' };
-
-  if (c.horizonDays <= sel.fastHorizonDays) {
-    if (sel.requireTwoSidedBook && !c.twoSided) {
-      return { tier: 'slow', reason: `near-dated but no two-sided book` };
-    }
-    if (c.spread > sel.maxSpreadCents) {
-      return { tier: 'slow', reason: `near-dated but ${c.spread}c spread` };
-    }
-    return { tier: 'fast', reason: `closes in ${c.horizonDays.toFixed(1)}d` };
-  }
-
-  if (c.horizonDays <= sel.slowHorizonDays) {
-    return { tier: 'slow', reason: `closes in ${Math.round(c.horizonDays)}d` };
-  }
-  return { tier: 'archive', reason: `closes in ${Math.round(c.horizonDays)}d` };
-}
-
-/**
- * Rank for cap application: liquidity, with a boost for categories that have
- * an external anchor.
- *
- * Anchorable markets can be scored on more than price movement, so when a cap
- * forces a choice they are worth more than a marginally more liquid market
- * the model can only guess at.
- */
-function rankOf(c: Omit<Candidate, 'tier' | 'reason' | 'rank'>, sel: Selection): number {
-  const liquidity = Math.log10(Math.max(1, c.volume));
-  const boost = c.anchorable ? sel.anchorRankBoost * 10 : 0;
-  return liquidity + boost;
-}
+const EMPTY_STATE: State = {
+  cursor: null,
+  pages_done: 0,
+  markets_seen: 0,
+  sweep_started_at: null,
+};
 
 Deno.serve(handler(async (req) => {
   const db = serviceClient();
   await requireCronOrAdmin(req, db);
   const started = Date.now();
-  const body = await readJson<{ maxPages?: number }>(req);
+  const body = await readJson<{ pages?: number; restart?: boolean }>(req);
 
-  // Selection lives on the stable model version, per section 7.
+  // Selection lives on the stable model version, per section 7. Discovery
+  // reads only the two knobs describing what a market IS; the ones deciding
+  // what gets priced are read by assign_cadence_tiers, in SQL.
   const { data: versionId } = await db.rpc('current_stable_version');
   const { data: version } = versionId
     ? await db.from('model_versions').select('thresholds').eq('id', versionId).maybeSingle()
@@ -182,172 +121,155 @@ Deno.serve(handler(async (req) => {
     ...DEFAULTS,
     ...((version?.thresholds as { selection?: Partial<Selection> })?.selection ?? {}),
   };
+  const anchorableCats = new Set(sel.anchorableCategories);
 
-  // ---- 1. sweep the whole book -------------------------------------------
-  const events: KalshiEvent[] = [];
-  let cursor: string | undefined;
-  let pages = 0;
-  const maxPages = Math.min(body.maxPages ?? MAX_PAGES, MAX_PAGES);
+  // ---- resume where the last run stopped ---------------------------------
+  const { data: stateRow } = await db
+    .from('discovery_state')
+    .select('cursor, pages_done, markets_seen, sweep_started_at')
+    .eq('id', true)
+    .maybeSingle();
 
+  const state: State = body.restart ? EMPTY_STATE : ((stateRow as State | null) ?? EMPTY_STATE);
+
+  const sweepStartedAt = state.sweep_started_at ?? new Date().toISOString();
+  const pagesThisRun = Math.min(body.pages ?? PAGES_PER_RUN, PAGES_PER_RUN);
+
+  let cursor = state.cursor ?? undefined;
+  let pagesDone = state.pages_done;
+  let marketsSeen = state.markets_seen;
+  let pagesRun = 0;
+  let wrote = 0;
+  let sweepComplete = false;
+
+  // ---- page, project, write, drop ----------------------------------------
   try {
-    while (pages < maxPages) {
+    while (pagesRun < pagesThisRun) {
       const page = await listEventsWithMarkets({ status: 'open', limit: 200, cursor });
-      const batch = page.events ?? [];
-      events.push(...batch);
+      const events = page.events ?? [];
+      pagesRun++;
+      pagesDone++;
+
+      const now = new Date().toISOString();
+      const rows: Record<string, unknown>[] = [];
+
+      for (const event of events) {
+        const category = normalizeCategory(event);
+        const isAnchorable = anchorableCats.has(category);
+
+        for (const m of event.markets ?? []) {
+          if (!m.ticker) continue;
+
+          const bid = dollarsToCents(m.yes_bid_dollars);
+          const ask = dollarsToCents(m.yes_ask_dollars);
+          const twoSided = bid > 0 && ask > 0;
+
+          rows.push({
+            id: m.ticker,
+            event_ticker: m.event_ticker ?? event.event_ticker ?? null,
+            question: (m.title ?? '').trim() || event.title || m.ticker,
+            category,
+            close_time: m.close_time ?? null,
+            status: m.status ?? null,
+            family: classifyFamily(event, m, sel),
+            anchorable: isAnchorable,
+            disc_volume: fixedToInt(m.volume_fp),
+            disc_spread: twoSided ? Math.max(0, ask - bid) : 100,
+            disc_two_sided: twoSided,
+            disc_seen_at: now,
+            updated_at: now,
+          });
+        }
+      }
+
+      marketsSeen += rows.length;
+
+      // Write this page before fetching the next, so nothing accumulates.
+      // cadence_tier is deliberately NOT in the payload: an upsert must never
+      // reset a tier that assign_cadence_tiers already decided.
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const slice = rows.slice(i, i + CHUNK);
+        const { error } = await db.from('markets').upsert(slice, { onConflict: 'id' });
+        if (error) throw new Error(`market upsert failed: ${error.message}`);
+        wrote += slice.length;
+      }
+
       cursor = page.cursor;
-      pages++;
-      if (!cursor || batch.length === 0) break;
+      if (!cursor || events.length === 0 || pagesDone >= MAX_SWEEP_PAGES) {
+        sweepComplete = true;
+        break;
+      }
     }
   } catch (err) {
     const rateLimited = err instanceof KalshiError && err.status === 429;
+
+    // Persist progress even on failure, so the next run resumes rather than
+    // starting the sweep over.
+    await db.from('discovery_state').update({
+      cursor: cursor ?? null,
+      pages_done: pagesDone,
+      markets_seen: marketsSeen,
+      sweep_started_at: sweepStartedAt,
+    }).eq('id', true);
+
     await logActivity(db, {
       type: rateLimited ? 'discovery.rate_limited' : 'discovery.failed',
-      detail: `after ${pages} pages: ${err instanceof Error ? err.message : String(err)}`,
+      detail: `after ${pagesDone} pages: ${err instanceof Error ? err.message : String(err)}`,
+      metadata: { pages_done: pagesDone, markets_seen: marketsSeen },
     });
-    // Partial sweeps are usable — tier what we saw rather than discarding it.
-    if (events.length === 0) {
-      return json({ ok: false, error: 'discovery failed before any page returned' }, 502);
-    }
-  }
 
-  // ---- 2. classify ---------------------------------------------------------
-  const candidates: Candidate[] = [];
-
-  for (const event of events) {
-    const category = normalizeCategory(event);
-    const anchorable = sel.anchorableCategories.includes(category);
-
-    for (const m of event.markets ?? []) {
-      if (!m.ticker) continue;
-
-      const bid = dollarsToCents(m.yes_bid_dollars);
-      const ask = dollarsToCents(m.yes_ask_dollars);
-      const base = {
-        id: m.ticker,
-        eventTicker: m.event_ticker ?? event.event_ticker,
-        question: m.title ?? event.title ?? m.ticker,
-        category,
-        closeTime: m.close_time ?? null,
-        status: m.status ?? null,
-        family: classifyFamily(event, m, sel),
-        anchorable,
-        horizonDays: daysUntil(m.close_time),
-        spread: bid > 0 && ask > 0 ? Math.max(0, ask - bid) : 100,
-        volume: fixedToInt(m.volume_fp),
-        twoSided: bid > 0 && ask > 0,
-      };
-
-      const { tier, reason } = provisionalTier(base, sel);
-      candidates.push({ ...base, tier, reason, rank: rankOf(base, sel) });
-    }
-  }
-
-  // ---- 3. apply caps -------------------------------------------------------
-  // Within each tier, keep the highest-ranked up to its cap and demote the
-  // rest one tier down. Demotion rather than exclusion: a market that loses a
-  // fast slot is still worth hourly tracking, and its history still
-  // accumulates for when it becomes near-dated.
-  const caps: Record<Tier, number> = {
-    fast: sel.fastCap,
-    slow: sel.slowCap,
-    archive: sel.archiveCap,
-    excluded: Number.MAX_SAFE_INTEGER,
-  };
-  const demoteTo: Record<string, Tier> = { fast: 'slow', slow: 'archive', archive: 'excluded' };
-
-  for (const tier of ['fast', 'slow', 'archive'] as const) {
-    const inTier = candidates.filter((c) => c.tier === tier).sort((a, b) => b.rank - a.rank);
-    for (const c of inTier.slice(caps[tier])) {
-      c.tier = demoteTo[tier]!;
-      c.reason = `${tier} cap of ${caps[tier]} reached`;
-    }
-  }
-
-  // ---- 4. persist ----------------------------------------------------------
-  const now = new Date().toISOString();
-  const CHUNK = 500;
-
-  for (let i = 0; i < candidates.length; i += CHUNK) {
-    const { error } = await db.from('markets').upsert(
-      candidates.slice(i, i + CHUNK).map((c) => ({
-        id: c.id,
-        event_ticker: c.eventTicker,
-        question: c.question,
-        category: c.category,
-        close_time: c.closeTime,
-        status: c.status,
-        family: c.family,
-        cadence_tier: c.tier,
-        tier_reason: c.reason,
-        anchorable: c.anchorable,
-        updated_at: now,
-      })),
-      { onConflict: 'id' },
+    return json(
+      { ok: false, error: err instanceof Error ? err.message : String(err), pagesDone, marketsSeen },
+      rateLimited ? 429 : 502,
     );
-    if (error) throw new Error(`market upsert failed: ${error.message}`);
   }
 
-  // ---- 5. record membership transitions ------------------------------------
-  // Point-in-time (section 11e): a market leaving a tier CLOSES its row rather
-  // than being deleted, so a backtest can ask what was visible, and why, at
-  // any past moment.
-  const open = await selectInBatches<{ id: number; market_id: string; tier: Tier }>(
-    candidates.map((c) => c.id),
-    (batch) =>
-      db
-        .from('universe_membership')
-        .select('id, market_id, tier')
-        .is('left_at', null)
-        .in('market_id', batch),
-    { label: 'open membership' },
-  );
+  // ---- assign tiers, but only on a COMPLETE sweep ------------------------
+  // Assigning from a partial sweep would apply caps to whatever fraction of
+  // the book happened to be visible, so a market's tier would depend on which
+  // page it landed on. Caps are only meaningful against the whole field.
+  let assignment: unknown = null;
 
-  const currentTier = new Map(open.map((r) => [r.market_id, r.tier]));
-  const changed = candidates.filter((c) => currentTier.get(c.id) !== c.tier);
+  if (sweepComplete) {
+    const { data, error } = await db.rpc('assign_cadence_tiers');
+    if (error) throw new Error(`tier assignment failed: ${error.message}`);
+    assignment = data;
 
-  const closing = changed.filter((c) => currentTier.has(c.id)).map((c) => c.id);
-  const closeResult = await forEachBatch(closing, (batch) =>
-    db.from('universe_membership').update({ left_at: now }).is('left_at', null).in('market_id', batch));
-  if (closeResult.error) console.warn('membership close failed:', closeResult.error);
-
-  for (let i = 0; i < changed.length; i += CHUNK) {
-    const { error } = await db.from('universe_membership').insert(
-      changed.slice(i, i + CHUNK).map((c) => ({
-        market_id: c.id,
-        tier: c.tier,
-        family: c.family,
-        reason: c.reason,
-        rank_score: Number(c.rank.toFixed(3)),
-        entered_at: now,
-      })),
-    );
-    if (error) {
-      console.error('membership insert failed:', error.message);
-      break;
-    }
+    await db.from('discovery_state').update({
+      cursor: null,
+      pages_done: 0,
+      markets_seen: 0,
+      sweep_started_at: null,
+      last_completed_at: new Date().toISOString(),
+      last_sweep_pages: pagesDone,
+      last_sweep_markets: marketsSeen,
+    }).eq('id', true);
+  } else {
+    await db.from('discovery_state').update({
+      cursor: cursor ?? null,
+      pages_done: pagesDone,
+      markets_seen: marketsSeen,
+      sweep_started_at: sweepStartedAt,
+    }).eq('id', true);
   }
-
-  const byTier = (t: Tier) => candidates.filter((c) => c.tier === t).length;
-  const byFamily = (f: Family) => candidates.filter((c) => c.family === f).length;
 
   const result = {
     ok: true,
-    pages,
-    events: events.length,
-    markets: candidates.length,
-    tiers: { fast: byTier('fast'), slow: byTier('slow'), archive: byTier('archive'), excluded: byTier('excluded') },
-    families: { standard: byFamily('standard'), multi_stage: byFamily('multi_stage'), mve_shard: byFamily('mve_shard') },
-    anchorable: candidates.filter((c) => c.anchorable && c.tier !== 'excluded').length,
-    transitions: changed.length,
+    pagesThisRun: pagesRun,
+    pagesDone,
+    marketsThisRun: wrote,
+    marketsSeen,
+    sweepComplete,
+    assignment,
     ms: Date.now() - started,
   };
 
   await logActivity(db, {
-    type: 'discovery.completed',
-    detail:
-      `${result.markets} markets from ${result.events} events — ` +
-      `fast ${result.tiers.fast}, slow ${result.tiers.slow}, archive ${result.tiers.archive}, ` +
-      `${result.transitions} tier changes`,
+    type: sweepComplete ? 'discovery.sweep_completed' : 'discovery.progress',
+    detail: sweepComplete
+      ? `sweep complete: ${pagesDone} pages, ${marketsSeen} markets, tiers ${JSON.stringify(assignment)}`
+      : `${pagesRun} pages this run (${pagesDone} so far, ${marketsSeen} markets)`,
     metadata: result,
   });
 
