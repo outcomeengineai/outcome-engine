@@ -124,28 +124,58 @@ Deno.serve(handler(async (req) => {
     .map((h: { signal: SignalKey }) => h.signal);
 
   // ---- markets to score --------------------------------------------------
-  let marketQuery = db
-    .from('markets')
-    .select('id, question, category')
-    .is('resolved_at', null)
-    .limit(Math.min(body.limit ?? MAX_MARKETS_PER_PASS, MAX_MARKETS_PER_PASS));
-
-  if (body.marketIds?.length) marketQuery = marketQuery.in('id', body.marketIds);
-  else marketQuery = marketQuery.or(`close_time.is.null,close_time.gt.${new Date().toISOString()}`);
-
-  const { data: markets, error: mErr } = await marketQuery;
-  if (mErr) throw new Error(`market load failed: ${mErr.message}`);
-  if (!markets?.length) return json({ ok: true, scored: 0, reason: 'no open markets' });
-
-  const ids = (markets as MarketRow[]).map((m) => m.id);
-
-  // ---- snapshot history, one query for the whole batch -------------------
+  //
+  // Chosen from the SNAPSHOT side, not the markets table. Selecting from
+  // markets with a bare LIMIT and no ORDER BY returns an arbitrary slice, and
+  // it reliably picked 400 stale rows with no price history — every pass
+  // reported scored:0, skippedNoData:400 while thousands of fresh snapshots
+  // sat unused.
+  //
+  // Starting from latest_snapshots guarantees every candidate HAS data, and
+  // ordering by volume means the markets members actually trade are the ones
+  // that get scored when there are more than a pass can hold.
   const since = new Date(Date.now() - HISTORY_HOURS * 3600_000).toISOString();
+  const cap = Math.min(body.limit ?? MAX_MARKETS_PER_PASS, MAX_MARKETS_PER_PASS);
+
+  let ids: string[];
+  if (body.marketIds?.length) {
+    ids = body.marketIds.slice(0, cap);
+  } else {
+    const { data: liquid, error: lErr } = await db
+      .from('latest_snapshots')
+      .select('market_id, volume')
+      .gte('ts', since)
+      .order('volume', { ascending: false })
+      .limit(cap);
+    if (lErr) throw new Error(`snapshot candidates failed: ${lErr.message}`);
+    ids = (liquid ?? []).map((r: { market_id: string }) => r.market_id);
+  }
+
+  if (ids.length === 0) {
+    return json({ ok: true, scored: 0, reason: 'no markets with recent snapshots' });
+  }
+
+  const now = new Date().toISOString();
+  const markets = await selectInBatches<MarketRow>(
+    ids,
+    (batch) =>
+      db
+        .from('markets')
+        .select('id, question, category')
+        .in('id', batch)
+        .is('resolved_at', null)
+        .or(`close_time.is.null,close_time.gt.${now}`),
+    { label: 'market load' },
+  );
+
+  if (markets.length === 0) {
+    return json({ ok: true, scored: 0, reason: 'no open markets among candidates' });
+  }
 
   // Batched: 400 tickers in one .in() produced a ~12KB URL, which PostgREST
   // refused to send at all. See _shared/batch.ts.
   const snaps = await selectInBatches<Snapshot & { market_id: string }>(
-    ids,
+    markets.map((m) => m.id),
     (batch) =>
       db
         .from('market_snapshots')
@@ -176,7 +206,7 @@ Deno.serve(handler(async (req) => {
   let skippedNoData = 0;
   let belowSurface = 0;
 
-  for (const market of markets as MarketRow[]) {
+  for (const market of markets) {
     const hist = history.get(market.id) ?? [];
     const last = hist[hist.length - 1];
     if (!last) { skippedNoData++; continue; }
@@ -279,6 +309,7 @@ Deno.serve(handler(async (req) => {
     modelVersion: version.version_label,
     disabledSignals: disabled,
     considered: markets.length,
+    candidates: ids.length,
     scored: scoreRows.length,
     tags: tagRows.length,
     belowSurface,
