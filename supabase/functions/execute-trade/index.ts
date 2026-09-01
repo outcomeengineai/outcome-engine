@@ -25,7 +25,7 @@ import {
 } from '../_shared/http.ts';
 import { createOrder, getBalance, getOrder, KalshiError } from '../_shared/kalshi.ts';
 import { loadKalshiCredentials } from '../_shared/vault.ts';
-import { logActivity, notify, notifyAdmins } from '../_shared/log.ts';
+import { logActivity, logPlatformFlow, notify, notifyAdmins } from '../_shared/log.ts';
 import { sidePriceCents, stakeCents } from '../_shared/outcome-shared.mjs';
 import type { RiskLimits, Side, TradeMode } from '../_shared/outcome-shared.mjs';
 
@@ -274,6 +274,16 @@ Deno.serve(handler(async (req) => {
 
   // ---- paper stops here --------------------------------------------------
   if (mode === 'paper') {
+    await logPlatformFlow(db, {
+      marketId: market.id,
+      tradeId: trade.id,
+      userId: user.id,
+      side,
+      contracts: body.contracts,
+      price: currentPrice,
+      mode: 'paper',
+    });
+
     await logActivity(db, {
       userId: user.id,
       type: 'trade.opened',
@@ -436,6 +446,18 @@ Deno.serve(handler(async (req) => {
       payload: { trade_id: trade.id, filled, requested: body.contracts },
     });
   }
+
+  // Log the FILLED quantity. Own-flow exclusion subtracts volume that
+  // actually reached the book, and a partial fill only put `filled` there.
+  await logPlatformFlow(db, {
+    marketId: market.id,
+    tradeId: trade.id,
+    userId: user.id,
+    side,
+    contracts: filled,
+    price: currentPrice,
+    mode: 'live',
+  });
 
   await logActivity(db, {
     userId: user.id,

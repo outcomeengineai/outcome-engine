@@ -23,6 +23,7 @@ import {
 } from '../_shared/signals.ts';
 import { logActivity } from '../_shared/log.ts';
 import { forEachBatch, selectInBatches } from '../_shared/batch.ts';
+import { DEFAULT_MAGNITUDE_STEP, recordTheses, type Thesis } from '../_shared/thesis.ts';
 import {
   activeWeights,
   combineSignals,
@@ -208,6 +209,7 @@ Deno.serve(handler(async (req) => {
   // ---- score --------------------------------------------------------------
   const scoreRows: Record<string, unknown>[] = [];
   const tagRows: Record<string, unknown>[] = [];
+  const theses: Thesis[] = [];
   const ts = new Date().toISOString();
 
   let skippedNoData = 0;
@@ -307,6 +309,23 @@ Deno.serve(handler(async (req) => {
       breakdown: winner.breakdown,
     });
 
+    // Every scored market gets a thesis, traded or not. Until anchors,
+    // coherence and flow detection land there is no concrete mispricing
+    // driver to name, so this is 'none' — which is a real answer, and still a
+    // labelled example once the market resolves.
+    theses.push({
+      marketId: market.id,
+      thesisType: 'none',
+      direction: null,
+      magnitude: null,
+      payload: {
+        score: winner.score,
+        side,
+        separation: Number(separation.toFixed(2)),
+        breakdown: winner.breakdown,
+      },
+    });
+
     for (const tag of autoTags({
       micro,
       news,
@@ -344,6 +363,14 @@ Deno.serve(handler(async (req) => {
     if (error) console.warn('tag insert failed:', error.message);
   }
 
+  const thesisResult = await recordTheses(
+    db,
+    version.id,
+    theses,
+    Number((thresholds as { thesisMagnitudeStep?: number }).thesisMagnitudeStep
+      ?? DEFAULT_MAGNITUDE_STEP),
+  );
+
   const pct = (xs: number[], p: number) => {
     if (xs.length === 0) return null;
     const sorted = [...xs].sort((a, b) => a - b);
@@ -367,6 +394,8 @@ Deno.serve(handler(async (req) => {
     scoreMax: allScores.length ? Math.max(...allScores) : null,
     sepP50: pct(allSeparations, 0.5),
     sepMax: allSeparations.length ? Math.max(...allSeparations) : null,
+    thesesWritten: thesisResult.written,
+    thesesUnchanged: thesisResult.unchanged,
     newsFetched: newsResult.fetched,
     newsCached: newsResult.cached,
     newsAborted: newsResult.aborted,

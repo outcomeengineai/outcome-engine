@@ -19,6 +19,7 @@ import { getMarket, getSettlements, KalshiError, type KalshiSettlement } from '.
 import { loadKalshiCredentials } from '../_shared/vault.ts';
 import { logActivity, notify, notifyAdmins } from '../_shared/log.ts';
 import { selectInBatches } from '../_shared/batch.ts';
+import { stampFinalThesis } from '../_shared/thesis.ts';
 import { allocateSettlementCents, formatUsd, realizedPnlCents } from '../_shared/outcome-shared.mjs';
 
 /** Markets checked for settlement per pass. */
@@ -91,6 +92,13 @@ Deno.serve(handler(async (req) => {
 
       newlyResolved.push({ id: m.id, outcome });
       marketsResolved++;
+
+      // Unconditional final-state thesis. The last transition may have been
+      // days ago, which leaves the training label ambiguous about what the
+      // platform believed at the end. This row states it explicitly and
+      // carries whether the thesis pointed the way the market actually went.
+      const { data: stableVersion } = await db.rpc('current_stable_version');
+      if (stableVersion) await stampFinalThesis(db, stableVersion, m.id, outcome);
     } catch (err) {
       if (err instanceof KalshiError && err.status === 429) break; // back off, retry next hour
       console.warn(`settlement check failed for ${m.id}:`, err instanceof Error ? err.message : err);

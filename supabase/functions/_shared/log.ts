@@ -87,3 +87,47 @@ export async function notifyAdmins(
   }
   await notifyMany(db, (data ?? []).map((u) => ({ ...n, userId: u.id })));
 }
+
+/**
+ * Record an order this platform originated.
+ *
+ * The flow detector (Edge Signals v2 §4) reads unusual volume as a signal that
+ * someone informed is trading. Platform members act on the same score, in the
+ * same direction, within minutes of each other, on books thin enough to move.
+ * Without subtracting our own contribution the detector reads the platform as
+ * informed flow and feeds back into itself — a signal that can hear its own
+ * echo is not a signal.
+ *
+ * PAPER trades are logged and marked rather than omitted. They never touch a
+ * real book, so the exclusion query filters to mode='live'; logging both makes
+ * that distinction auditable instead of assumed, and means a later change of
+ * mind about paper does not need history that was never captured.
+ *
+ * Best-effort, like the activity log: a trade that filled is a filled trade
+ * whether or not we managed to note it.
+ */
+export async function logPlatformFlow(
+  db: SupabaseClient,
+  flow: {
+    marketId: string;
+    tradeId: string;
+    userId: string;
+    side: 'YES' | 'NO';
+    contracts: number;
+    price: number;
+    mode: 'paper' | 'live';
+    executionMode?: 'manual' | 'auto_flow' | 'model_portfolio';
+  },
+): Promise<void> {
+  const { error } = await db.from('platform_flow').insert({
+    market_id: flow.marketId,
+    trade_id: flow.tradeId,
+    user_id: flow.userId,
+    side: flow.side,
+    contracts: flow.contracts,
+    price: flow.price,
+    mode: flow.mode,
+    execution_mode: flow.executionMode ?? 'manual',
+  });
+  if (error) console.error('platform_flow write failed:', error.message);
+}
