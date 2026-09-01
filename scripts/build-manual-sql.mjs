@@ -89,5 +89,49 @@ ${bookkeeping([CRON])}`;
 
 fs.writeFileSync(path.join(OUT, 'apply-cron.sql'), cron);
 
+/**
+ * Migrations applied by hand so far, newest last. Anything after these goes
+ * into pending.sql — a single paste that brings a live database up to date
+ * without needing `supabase db push`.
+ *
+ * Update this list as migrations are applied.
+ */
+const APPLIED_THROUGH = '20260823000700';
+
+const pending = all.filter(
+  (f) => f.split('_')[0] > APPLIED_THROUGH && f !== CRON,
+);
+
+if (pending.length) {
+  let out = `-- =========================================================================
+-- GENERATED — do not edit. Rebuild: npm run build:manual-sql
+--
+-- Migrations not yet applied to the live database, in order, wrapped in one
+-- transaction. Paste into the Supabase SQL editor and Run.
+--
+-- All-or-nothing: a failure applies nothing, so it is safe to re-run after a
+-- fix. Already-applied statements would fail on the first CREATE, which is
+-- why this file only contains what is genuinely outstanding — keep
+-- APPLIED_THROUGH in scripts/build-manual-sql.mjs current.
+-- =========================================================================
+
+begin;
+`;
+  for (const f of pending) {
+    out += `
+
+-- ===== ${f} ${'='.repeat(Math.max(0, 60 - f.length))}
+
+`;
+    out += fs.readFileSync(path.join(MIGRATIONS, f), 'utf8');
+  }
+  out += `
+${bookkeeping(pending)}
+commit;
+`;
+  fs.writeFileSync(path.join(OUT, 'pending.sql'), out);
+  console.log(`pending.sql   ${pending.length} unapplied: ${pending.map((f) => f.split('_')[0]).join(', ')}`);
+}
+
 console.log(`apply-all.sql  ${main.length} migrations, ${out.split('\n').length} lines`);
 console.log(`apply-cron.sql written`);
