@@ -299,25 +299,45 @@ export async function listAllEventsWithMarkets(
  * universe by paging the whole book costs ~60 requests; asking for the tickers
  * we actually want costs one request per batch.
  *
- * Batch size is bounded by URL length, not by the API: tickers average ~23
- * characters, so 150 lands around 3.7KB — comfortably inside the ~8KB limit
- * that silently broke the snapshot query earlier. Measured up to 200 (5KB,
- * 149ms) without complaint; 150 keeps margin.
+ * Batches are sized by URL LENGTH, not by count. The first version sent a
+ * fixed 150 per request, sized from the head of the book where tickers average
+ * ~23 characters. The slow tier -- then still holding the shard markets from
+ * the original ingestion -- failed with 414 Request-URI Too Long every hour.
+ * Counting tickers assumes a ticker length; measuring the URL does not.
+ *
+ * 6,000 characters of joined tickers is proven: the 600 longest tickers in the
+ * live book batched to a longest URL of 6,060 characters and every request
+ * returned 200. The count ceiling keeps batches inside what was tested.
  */
-export const TICKER_BATCH = 150;
+export const TICKER_URL_BUDGET = 6000;
+export const TICKER_COUNT_CEILING = 200;
 
 export async function getMarketsByTickers(
   tickers: readonly string[],
 ): Promise<KalshiMarket[]> {
   const out: KalshiMarket[] = [];
+  let batch: string[] = [];
+  let length = 0;
 
-  for (let i = 0; i < tickers.length; i += TICKER_BATCH) {
-    const batch = tickers.slice(i, i + TICKER_BATCH);
+  const flush = async () => {
+    if (batch.length === 0) return;
     const res = await kalshiRequest<{ markets?: KalshiMarket[] }>('/markets', {
       query: { tickers: batch.join(',') },
     });
     out.push(...(res.markets ?? []));
+    batch = [];
+    length = 0;
+  };
+
+  for (const t of tickers) {
+    const cost = t.length + 1; // plus the comma
+    if (batch.length > 0 && (length + cost > TICKER_URL_BUDGET || batch.length >= TICKER_COUNT_CEILING)) {
+      await flush();
+    }
+    batch.push(t);
+    length += cost;
   }
+  await flush();
 
   return out;
 }
