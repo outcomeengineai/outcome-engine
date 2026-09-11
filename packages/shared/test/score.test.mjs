@@ -74,3 +74,23 @@ test('retune notifications fire on a material move only', () => {
   assert.equal(retuneRecommendation(5.5, 7), 'review');
   assert.equal(retuneRecommendation(3.2, 7), 'consider_exit');
 });
+
+test('a zero news weight renormalises onto the live signals, not toward the middle', () => {
+  // v1.2 zeroes news until a real source exists. With news at 0.28 and a
+  // neutral 5.0 sub-score, a strong micro signal was being dragged toward 5;
+  // with news at 0, the same inputs must score on micro and base alone.
+  const sub = { micro: 8, news: 5, base: 6 };
+  const withNews = combineSignals(sub, { micro: 0.6, news: 0.28, base: 0.12 });
+  const without = combineSignals(sub, { micro: 0.6, news: 0, base: 0.12 });
+  assert.equal(without.breakdown.news, 0);
+  assert.ok(without.score > withNews.score, `${without.score} should exceed ${withNews.score}`);
+  // 0.6/0.72 * 8 + 0.12/0.72 * 6 = 6.667 + 1.0
+  assert.equal(without.score, 7.7);
+});
+
+test('an unavailable signal disabled for the pass renormalises the same way', () => {
+  const w = activeWeights({ micro: 0.6, news: 0.28, base: 0.12 }, ['news']);
+  assert.equal(w.news, 0);
+  assert.ok(Math.abs(w.micro + w.base - 1.0) < 1e-9);
+  assert.ok(Math.abs(w.micro / w.base - 5) < 1e-9); // 0.6 : 0.12 ratio preserved
+});

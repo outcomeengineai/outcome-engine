@@ -248,6 +248,17 @@ Deno.serve(handler(async (req) => {
     ? { signals: new Map<string, NewsSignal>(), fetched: 0, cached: 0, aborted: false }
     : await newsSignalsFor(db, markets);
 
+  // An UNREACHABLE signal is disabled for this pass, whatever the health table
+  // says. The circuit breaker in signal-health trips on hit rate -- a signal
+  // that predicts badly -- not on availability, so news being down never
+  // registered as failure: it contributed a neutral value at full weight on
+  // every pass, compressing every score toward the middle and damping the one
+  // signal that was working. Renormalising here means no version can be
+  // quietly diluted by a source that is not there.
+  const newsUnavailable = !disabled.includes('news') &&
+    (newsResult.aborted || (newsResult.fetched === 0 && newsResult.cached === 0));
+  const passDisabled: SignalKey[] = newsUnavailable ? [...disabled, 'news'] : disabled;
+
   // ---- score --------------------------------------------------------------
   const scoreRows: Record<string, unknown>[] = [];
   const tagRows: Record<string, unknown>[] = [];
@@ -295,7 +306,7 @@ Deno.serve(handler(async (req) => {
     const news: NewsSignal = newsResult.signals.get(market.id) ?? NEUTRAL_NEWS;
 
     const weights = weightsForCategory(weightConfig, market.category);
-    const usable = activeWeights(weights, disabled);
+    const usable = activeWeights(weights, passDisabled);
     if (!usable) {
       // Every signal disabled: there is nothing to score with, and emitting a
       // number anyway would be a lie with a decimal point on it.
@@ -437,7 +448,8 @@ Deno.serve(handler(async (req) => {
     ok: true,
     tier,
     modelVersion: version.version_label,
-    disabledSignals: disabled,
+    disabledSignals: passDisabled,
+    newsUnavailable,
     considered: markets.length,
     candidates: ids.length,
     scored: scoreRows.length,
