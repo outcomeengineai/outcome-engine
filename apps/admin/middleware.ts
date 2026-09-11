@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { supabaseAnonKey, supabaseUrl } from './lib/supabase-env';
 
 /**
  * Refresh the Supabase session on every request and gate the dashboard.
@@ -36,8 +37,8 @@ async function guard(request: NextRequest) {
   // what is wrong or where to fix it. Vercel bakes NEXT_PUBLIC_* in at build
   // time, so a variable added after the last deploy is still missing until
   // the next one.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !anonKey) {
     const missing = [!url && 'NEXT_PUBLIC_SUPABASE_URL', !anonKey && 'NEXT_PUBLIC_SUPABASE_ANON_KEY']
       .filter(Boolean).join(' and ');
@@ -58,9 +59,11 @@ async function guard(request: NextRequest) {
 
   let response = NextResponse.next({ request });
 
+  // supabaseUrl() accepts the bare project ref as well as the full URL; a
+  // ref pasted here is what took production down with "Invalid supabaseUrl".
   const supabase = createServerClient(
-    url,
-    anonKey,
+    supabaseUrl(),
+    supabaseAnonKey(),
     {
       cookies: {
         getAll: () => request.cookies.getAll(),

@@ -1,6 +1,7 @@
 import 'server-only';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { supabaseAnonKey, supabaseUrl } from './supabase-env';
 
 /**
  * Supabase clients for the admin dashboard.
@@ -14,17 +15,9 @@ import { cookies } from 'next/headers';
  * compromised dashboard session is bounded by what that account may already do.
  */
 
-const url = () => {
-  const v = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!v) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
-  return v;
-};
-
-const anonKey = () => {
-  const v = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!v) throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not set');
-  return v;
-};
+// Normalised in one place: accepts the project URL or the bare ref.
+const url = supabaseUrl;
+const anonKey = supabaseAnonKey;
 
 export async function serverClient() {
   const store = await cookies();
