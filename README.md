@@ -139,6 +139,14 @@ coin flip, and a coin flip with a side badge would imply a view the model does
 not hold. Those markets are counted as `noDirection` in the scoring response
 rather than surfaced.
 
+
+**The news signal is on hold, not merely neutral.** Measured against GDELT:
+one request permitted every five seconds, ~12 seconds per response. The
+per-market article search the signal was designed around cannot run at 800
+markets per 5-minute pass, so `signal_health.news.hold_reason` is set, the
+scorer does not fetch, and v1.2 carries a news weight of zero. Lifting the
+hold is a manual act, once a viable source exists -- the health job never
+re-enables a held signal on its own.
 This is why the first fifteen live scores were all YES: with drift at zero the
 sides tied exactly and the tie-break went one way every time. Fixed in
 20260823001000, but the underlying limitation is structural, not a bug.
