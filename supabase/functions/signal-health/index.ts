@@ -133,10 +133,20 @@ Deno.serve(handler(async (req) => {
   for (const signal of SIGNAL_KEYS) {
     const t = tally[signal];
     const existing = currentBySignal.get(signal) as
-      | { status: string; disabled_until: string | null; baseline_win_rate: number | null }
+      | { status: string; disabled_until: string | null; baseline_win_rate: number | null; hold_reason: string | null }
       | undefined;
 
     const winRate = t.total > 0 ? t.wins / t.total : null;
+
+    // A manual hold is not a cooldown. It says the source is unavailable, it
+    // was set by a person with a reason, and it is lifted by a person. This
+    // job records the window and otherwise leaves the row alone -- without
+    // this, a held signal read as an expired cooldown and came back on within
+    // the hour. See migration 20260823002000.
+    if (existing?.hold_reason) {
+      historyRows.push({ signal, win_rate: winRate, sample_count: t.total, status: 'disabled' });
+      continue;
+    }
 
     // A cooling-off signal comes back on its own when the window expires.
     if (existing?.status === 'disabled') {

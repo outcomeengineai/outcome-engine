@@ -149,12 +149,16 @@ Deno.serve(handler(async (req) => {
   // ---- which signals are currently usable --------------------------------
   const { data: health } = await db
     .from('signal_health')
-    .select('signal, status, disabled_until');
+    .select('signal, status, disabled_until, hold_reason');
 
+  // A manual hold (hold_reason set) is disabled regardless of status or
+  // cooldown: it means the source is unavailable, and fetching from it is
+  // both pointless and impolite. See migration 20260823002000.
   const disabled: SignalKey[] = (health ?? [])
-    .filter((h: { status: string; disabled_until: string | null }) =>
-      h.status === 'disabled' &&
-      (!h.disabled_until || new Date(h.disabled_until) > new Date())
+    .filter((h: { status: string; disabled_until: string | null; hold_reason: string | null }) =>
+      h.hold_reason !== null ||
+      (h.status === 'disabled' &&
+      (!h.disabled_until || new Date(h.disabled_until) > new Date()))
     )
     .map((h: { signal: SignalKey }) => h.signal);
 
