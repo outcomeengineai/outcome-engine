@@ -10,11 +10,37 @@ import { NextResponse, type NextRequest } from 'next/server';
  * full of empty tables.
  */
 export async function middleware(request: NextRequest) {
+  // Fail LEGIBLY. With the non-null assertions this used to carry, a missing
+  // env var made createServerClient throw, and every route on the deployment
+  // answered 500 MIDDLEWARE_INVOCATION_FAILED -- which says nothing about
+  // what is wrong or where to fix it. Vercel bakes NEXT_PUBLIC_* in at build
+  // time, so a variable added after the last deploy is still missing until
+  // the next one.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    const missing = [!url && 'NEXT_PUBLIC_SUPABASE_URL', !anonKey && 'NEXT_PUBLIC_SUPABASE_ANON_KEY']
+      .filter(Boolean).join(' and ');
+    return new NextResponse(
+      `Outcome Engine admin is not configured.
+
+` +
+      `Missing environment variable(s): ${missing}
+
+` +
+      `Set them in Vercel -> Project -> Settings -> Environment Variables for the Production ` +
+      `environment, then REDEPLOY -- NEXT_PUBLIC_* values are fixed at build time, so adding ` +
+      `them without redeploying changes nothing.
+`,
+      { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } },
+    );
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
