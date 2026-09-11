@@ -22,7 +22,7 @@ import {
   type Snapshot,
 } from '../_shared/signals.ts';
 import { logActivity } from '../_shared/log.ts';
-import { forEachBatch, selectInBatches } from '../_shared/batch.ts';
+import { forEachBatch, selectInBatches, selectPaged } from '../_shared/batch.ts';
 import { DEFAULT_MAGNITUDE_STEP, recordTheses, type Thesis } from '../_shared/thesis.ts';
 import {
   activeWeights,
@@ -37,10 +37,24 @@ import {
 } from '../_shared/outcome-shared.mjs';
 
 /** How far back the microstructure window looks. */
-const HISTORY_HOURS = 6;
+/**
+ * Price history window, per tier. Drift needs at least three ACTIVE
+ * intervals to register, so the window has to hold more than three snapshots
+ * at that tier's cadence: fast is priced every 5 minutes, slow hourly,
+ * archive daily. One window for all three either starves the slow tiers or
+ * drags weeks of noise into the fast one.
+ */
+const HISTORY_HOURS: Record<ScoreTier, number> = { fast: 6, slow: 72, archive: 24 * 21 };
 
 /** Cap per pass so one invocation cannot run past the function time limit. */
-const MAX_MARKETS_PER_PASS = 400;
+/**
+ * Markets per pass, per tier. Fast covers its whole cap in one pass -- it is
+ * the tier members actually act on, and a pass that scores 82 of 800 because
+ * long-dated markets out-ranked them on volume undoes the tiering. Slow and
+ * archive are scored in volume order up to the cap.
+ */
+type ScoreTier = 'fast' | 'slow' | 'archive';
+const MAX_MARKETS_PER_PASS: Record<ScoreTier, number> = { fast: 900, slow: 1000, archive: 1000 };
 
 interface MarketRow {
   id: string;
@@ -111,7 +125,8 @@ Deno.serve(handler(async (req) => {
   const db = serviceClient();
   await requireCronOrAdmin(req, db);
 
-  const body = await readJson<{ limit?: number; marketIds?: string[] }>(req);
+  const body = await readJson<{ limit?: number; marketIds?: string[]; tier?: ScoreTier }>(req);
+  const tier: ScoreTier = body.tier ?? 'fast';
   const started = Date.now();
 
   // ---- the model version to score against --------------------------------
@@ -154,39 +169,47 @@ Deno.serve(handler(async (req) => {
   // Starting from latest_snapshots guarantees every candidate HAS data, and
   // ordering by volume means the markets members actually trade are the ones
   // that get scored when there are more than a pass can hold.
-  const since = new Date(Date.now() - HISTORY_HOURS * 3600_000).toISOString();
-  const cap = Math.min(body.limit ?? MAX_MARKETS_PER_PASS, MAX_MARKETS_PER_PASS);
-
-  let ids: string[];
-  if (body.marketIds?.length) {
-    ids = body.marketIds.slice(0, cap);
-  } else {
-    const { data: liquid, error: lErr } = await db
-      .from('latest_snapshots')
-      .select('market_id, volume')
-      .gte('ts', since)
-      .order('volume', { ascending: false })
-      .limit(cap);
-    if (lErr) throw new Error(`snapshot candidates failed: ${lErr.message}`);
-    ids = (liquid ?? []).map((r: { market_id: string }) => r.market_id);
-  }
-
-  if (ids.length === 0) {
-    return json({ ok: true, scored: 0, reason: 'no markets with recent snapshots' });
-  }
-
+  const since = new Date(Date.now() - HISTORY_HOURS[tier] * 3600_000).toISOString();
+  const cap = Math.min(body.limit ?? MAX_MARKETS_PER_PASS[tier], MAX_MARKETS_PER_PASS[tier]);
   const now = new Date().toISOString();
-  const markets = await selectInBatches<MarketRow>(
-    ids,
-    (batch) =>
-      db
-        .from('markets')
-        .select('id, question, category, cadence_tier')
-        .in('id', batch)
-        .is('resolved_at', null)
-        .or(`close_time.is.null,close_time.gt.${now}`),
-    { label: 'market load' },
-  );
+
+  // Candidates come from the TIER, not from a volume ranking over every
+  // snapshot. The first tiered pass showed why: ranking by volume filled 300
+  // of 400 slots with long-dated slow markets and scored 82 of the 800
+  // fast-tier markets the tiering exists to prioritise. Selecting by tier
+  // also keeps 'excluded' out -- a market that settled between passes stays
+  // tiered 'excluded' until resolution sync marks it, and was being scored
+  // in the gap.
+  let markets: MarketRow[];
+  if (body.marketIds?.length) {
+    markets = await selectInBatches<MarketRow>(
+      body.marketIds.slice(0, cap),
+      (batch) =>
+        db
+          .from('markets')
+          .select('id, question, category, cadence_tier')
+          .in('id', batch)
+          .is('resolved_at', null)
+          .neq('cadence_tier', 'excluded')
+          .or(`close_time.is.null,close_time.gt.${now}`),
+      { label: 'market load' },
+    );
+  } else {
+    markets = await selectPaged<MarketRow>(
+      (from, to) =>
+        db
+          .from('markets')
+          .select('id, question, category, cadence_tier')
+          .eq('cadence_tier', tier)
+          .is('resolved_at', null)
+          .or(`close_time.is.null,close_time.gt.${now}`)
+          .order('disc_volume', { ascending: false })
+          .order('id')
+          .range(from, to),
+      { max: cap, label: `${tier} tier candidates` },
+    );
+  }
+  const ids = markets.map((m) => m.id);
 
   if (markets.length === 0) {
     return json({ ok: true, scored: 0, reason: 'no open markets among candidates' });
@@ -412,6 +435,7 @@ Deno.serve(handler(async (req) => {
 
   const result = {
     ok: true,
+    tier,
     modelVersion: version.version_label,
     disabledSignals: disabled,
     considered: markets.length,
