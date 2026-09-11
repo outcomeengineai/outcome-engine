@@ -15,8 +15,17 @@
 
 const REF = /^[a-z0-9]{20}$/;
 
+/**
+ * Trim, drop a trailing slash, and forgive the two most common paste
+ * mistakes: wrapping quotes, and the whole `NAME=value` line from a .env
+ * file pasted into the value field. The latter is exactly what production
+ * had -- the URL was correct and carried its own variable name as a prefix.
+ */
 function clean(v: string | undefined): string {
-  return (v ?? '').trim().replace(/\/+$/, '');
+  let s = (v ?? '').trim();
+  s = s.replace(/^NEXT_PUBLIC_SUPABASE_(URL|ANON_KEY)\s*=\s*/, '');
+  s = s.replace(/^["']|["']$/g, '').trim();
+  return s.replace(/\/+$/, '');
 }
 
 export function supabaseUrl(): string {
