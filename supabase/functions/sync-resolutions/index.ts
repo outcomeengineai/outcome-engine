@@ -15,15 +15,15 @@
  */
 
 import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
-import { getMarket, getSettlements, KalshiError, type KalshiSettlement } from '../_shared/kalshi.ts';
+import { getMarketsByTickers, getSettlements, KalshiError, type KalshiMarket, type KalshiSettlement } from '../_shared/kalshi.ts';
 import { loadKalshiCredentials } from '../_shared/vault.ts';
 import { logActivity, notify, notifyAdmins } from '../_shared/log.ts';
-import { selectInBatches, selectPaged } from '../_shared/batch.ts';
+import { forEachBatch, selectInBatches, selectPaged } from '../_shared/batch.ts';
 import { stampFinalThesis } from '../_shared/thesis.ts';
 import { allocateSettlementCents, formatUsd, realizedPnlCents } from '../_shared/outcome-shared.mjs';
 
-/** Markets checked for settlement per pass. */
-const MARKET_BATCH = 150;
+/** Past-close markets checked per pass; held markets are always included on top. */
+const MARKET_BATCH = 400;
 
 interface OpenTrade {
   id: string;
@@ -42,68 +42,114 @@ Deno.serve(handler(async (req) => {
   const started = Date.now();
 
   // ---- 1. find markets that have settled ---------------------------------
-  // Only markets someone actually holds a position in, plus ones already past
-  // their close time. There is no reason to poll settlement for a market no
-  // member ever touched.
+  // Two populations, and the second is the one that matters for learning.
+  //
+  // Markets someone HOLDS a position in must resolve so trades can settle.
+  // But the learning loop runs on MARKET volume, not trade volume: every
+  // scored market carries a thesis, and that thesis only becomes a labelled
+  // example when the market's outcome is recorded. The first version checked
+  // held markets only -- with no trades, nothing ever resolved, and no thesis
+  // ever received its label. The loop was wired and the clock never ticked.
+  //
+  // So: held markets, plus every market the platform has ever priced whose
+  // close has passed, oldest close first, capped per pass. Fetched as an
+  // exact set in a handful of requests rather than one call per market.
   const heldRows = await selectPaged<{ market_id: string }>(
     (from, to) =>
       db.from('trades').select('market_id').in('status', ['open', 'pending']).order('id').range(from, to),
     { label: 'held markets' },
   );
-
   const held = [...new Set(heldRows.map((r) => r.market_id))];
 
-  const candidates = (await selectInBatches<{ id: string; question: string }>(
+  const heldOpen = await selectInBatches<{ id: string }>(
     held,
-    (batch) =>
+    (batch) => db.from('markets').select('id').is('resolved_at', null).in('id', batch),
+    { label: 'held candidates' },
+  );
+
+  const pastClose = await selectPaged<{ id: string }>(
+    (from, to) =>
       db
         .from('markets')
-        .select('id, question, close_time')
+        .select('id')
         .is('resolved_at', null)
-        .in('id', batch),
-    { label: 'settlement candidates' },
-  )).slice(0, MARKET_BATCH);
+        .not('last_snapshot_at', 'is', null)
+        .lt('close_time', new Date().toISOString())
+        .order('close_time', { ascending: true })
+        .order('id')
+        .range(from, to),
+    { max: MARKET_BATCH, label: 'past-close candidates' },
+  );
+
+  const candidateIds = [...new Set([...heldOpen.map((m) => m.id), ...pastClose.map((m) => m.id)])];
 
   let marketsResolved = 0;
+  let stillOpen = 0;
   const newlyResolved: Array<{ id: string; outcome: 'YES' | 'NO' }> = [];
 
-  for (const m of candidates) {
-    try {
-      const { market } = await getMarket(m.id);
-      const settled = market.status === 'settled' || market.status === 'finalized';
-      if (!settled || !market.result) continue;
-
-      const result = market.result.toLowerCase();
-      // Kalshi reports 'yes' | 'no' | 'void'. A voided market has no winning
-      // side; positions are refunded, so it is not a win or a loss.
-      if (result !== 'yes' && result !== 'no') {
-        await logActivity(db, {
-          type: 'market.voided',
-          detail: `${m.id} settled as "${market.result}"`,
-          metadata: { market_id: m.id, result: market.result },
-        });
-        continue;
-      }
-
-      const outcome = result === 'yes' ? 'YES' : 'NO';
-      await db
-        .from('markets')
-        .update({ resolved_at: new Date().toISOString(), outcome, status: market.status })
-        .eq('id', m.id);
-
-      newlyResolved.push({ id: m.id, outcome });
-      marketsResolved++;
-
-      // Unconditional final-state thesis. The last transition may have been
-      // days ago, which leaves the training label ambiguous about what the
-      // platform believed at the end. This row states it explicitly and
-      // carries whether the thesis pointed the way the market actually went.
-      const { data: stableVersion } = await db.rpc('current_stable_version');
-      if (stableVersion) await stampFinalThesis(db, stableVersion, m.id, outcome);
-    } catch (err) {
-      if (err instanceof KalshiError && err.status === 429) break; // back off, retry next hour
-      console.warn(`settlement check failed for ${m.id}:`, err instanceof Error ? err.message : err);
+  let fetched: KalshiMarket[] = [];
+  try {
+    fetched = await getMarketsByTickers(candidateIds);
+  } catch (err) {
+    if (err instanceof KalshiError && err.status === 429) {
+      await logActivity(db, {
+        type: 'resolution.rate_limited',
+        detail: 'Kalshi 429 on settlement check; retry next hour',
+      });
+    } else {
+      console.warn('settlement fetch failed:', err instanceof Error ? err.message : err);
     }
+  }
+
+  const { data: stableVersion } = await db.rpc('current_stable_version');
+  const resolvedAt = new Date().toISOString();
+
+  for (const market of fetched) {
+    if (!market.ticker) continue;
+    const settled = market.status === 'settled' || market.status === 'finalized';
+    if (!settled || !market.result) { stillOpen++; continue; }
+
+    const result = market.result.toLowerCase();
+    // Kalshi reports 'yes' | 'no' | 'void'. A voided market has no winning
+    // side; positions are refunded, so it is not a win or a loss.
+    if (result !== 'yes' && result !== 'no') {
+      await db.from('markets')
+        .update({ resolved_at: resolvedAt, status: market.status, cadence_tier: 'excluded', tier_reason: 'voided' })
+        .eq('id', market.ticker);
+      await logActivity(db, {
+        type: 'market.voided',
+        detail: market.ticker + ' settled as "' + market.result + '"',
+        metadata: { market_id: market.ticker, result: market.result },
+      });
+      continue;
+    }
+
+    const outcome = result === 'yes' ? 'YES' : 'NO';
+    await db
+      .from('markets')
+      .update({
+        resolved_at: resolvedAt,
+        outcome,
+        status: market.status,
+        cadence_tier: 'excluded',
+        tier_reason: 'resolved',
+      })
+      .eq('id', market.ticker);
+
+    newlyResolved.push({ id: market.ticker, outcome });
+    marketsResolved++;
+
+    // Unconditional final-state thesis. The last transition may have been
+    // days ago, which leaves the training label ambiguous about what the
+    // platform believed at the end. This row states it explicitly and
+    // carries whether the thesis pointed the way the market actually went.
+    if (stableVersion) await stampFinalThesis(db, stableVersion, market.ticker, outcome);
+  }
+
+  // Close membership for anything that just left the universe.
+  if (newlyResolved.length) {
+    await forEachBatch(newlyResolved.map((m) => m.id), (batch) =>
+      db.from('universe_membership').update({ left_at: resolvedAt }).is('left_at', null).in('market_id', batch));
   }
 
   // ---- 2. resolve PAPER trades against the market outcome ----------------
@@ -280,8 +326,9 @@ Deno.serve(handler(async (req) => {
 
   const result = {
     ok: true,
-    marketsChecked: candidates.length,
+    marketsChecked: candidateIds.length,
     marketsResolved,
+    stillOpen,
     paperResolved,
     liveResolved,
     ms: Date.now() - started,
