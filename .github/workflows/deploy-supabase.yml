@@ -2,20 +2,28 @@ name: Deploy to Supabase
 
 # Applies migrations and deploys Edge Functions.
 #
-# This exists so the backend can be deployed from a browser: the three secrets
+# This exists so the backend can be deployed from a browser: the two secrets
 # below live in GitHub repo settings, never in a file, a shell command, or a
 # chat transcript. Pushing to main is the whole workflow.
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
 #   SUPABASE_ACCESS_TOKEN  Supabase account -> Access Tokens -> Generate new
-#   SUPABASE_DB_PASSWORD   the database password set when the project was created
 #   SUPABASE_PROJECT_REF   Project Settings -> General -> Reference ID
+#
+# There is deliberately NO database password. Migrations used to go through
+# `supabase db push`, which needs one, and it failed with 28P01 on every
+# attempt for weeks -- fresh passwords, session pooler, URL-encoding,
+# whitespace trimming, an explicit connection-string override. Both halves
+# now authenticate with the same access token, via the Management API for
+# SQL and the CLI for functions. One credential, and one that is proven to
+# work on every run.
 
 on:
   push:
     branches: [main]
     paths:
       - 'supabase/**'
+      - 'scripts/apply-migrations-api.mjs'
       - '.github/workflows/deploy-supabase.yml'
   # Lets you re-run it from the Actions tab without pushing anything.
   workflow_dispatch:
@@ -30,11 +38,19 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # Everything at or below this version was applied by hand through the
+      # SQL editor before the API path existed. The script RECORDS these as
+      # applied rather than re-running them, and only when the schema is
+      # already initialised -- a fresh project still runs the lot.
+      MIGRATIONS_BASELINE: '20260823001500'
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - uses: supabase/setup-cli@v1
         with:
@@ -44,120 +60,38 @@ jobs:
         run: |
           missing=""
           [ -z "$SUPABASE_ACCESS_TOKEN" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
-          [ -z "$SUPABASE_DB_PASSWORD" ]  && missing="$missing SUPABASE_DB_PASSWORD"
-          [ -z "$PROJECT_REF" ]           && missing="$missing SUPABASE_PROJECT_REF"
+          [ -z "$SUPABASE_PROJECT_REF" ]  && missing="$missing SUPABASE_PROJECT_REF"
           if [ -n "$missing" ]; then
             echo "Missing repo secret(s):$missing"
             echo "Add them under Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          echo "All three secrets present."
+          echo "Both secrets present."
 
-      - name: Link project
-        run: supabase link --project-ref "$PROJECT_REF"
-
-      # Build an explicit SESSION-POOLER connection string rather than letting
-      # the CLI resolve one.
-      #
-      # Two failure modes this removes. The pooler on port 5432 is session
-      # mode, which is what migrations need — the CLI can land on the direct
-      # host, which is IPv6-only from some runners. And the password is
-      # URL-encoded here: a generated password containing @ : / ? or # silently
-      # truncates a connection string and surfaces as "password authentication
-      # failed", which is indistinguishable from actually having it wrong.
-      #
-      # SUPABASE_DB_URL, if set, overrides all of this.
-      - name: Build database URL
-        env:
-          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          DB_URL_OVERRIDE: ${{ secrets.SUPABASE_DB_URL }}
-          DB_REGION: ${{ secrets.SUPABASE_DB_REGION }}
-        run: |
-          if [ -n "$DB_URL_OVERRIDE" ]; then
-            echo "::add-mask::$DB_URL_OVERRIDE"
-            echo "DB_URL=$DB_URL_OVERRIDE" >> $GITHUB_ENV
-            echo "Using SUPABASE_DB_URL override."
-            exit 0
-          fi
-          REGION="${DB_REGION:-us-west-2}"
-
-          # Diagnose the password WITHOUT revealing it. A secret pasted with a
-          # trailing newline is the classic invisible 28P01 — GitHub preserves
-          # whitespace exactly as entered, and nothing downstream complains.
-          RAW="$DB_PASSWORD"
-          TRIMMED=$(printf '%s' "$RAW" | tr -d '[:space:]')
-          if [ -z "$TRIMMED" ]; then
-            echo "SUPABASE_DB_PASSWORD is empty or whitespace only."
-            exit 1
-          fi
-          if [ "$TRIMMED" != "$RAW" ]; then
-            echo "NOTE: the stored password had surrounding whitespace. Trimmed."
-            echo "      Re-save the secret without a trailing newline."
-          fi
-          echo "::add-mask::$TRIMMED"
-          DB_PASSWORD="$TRIMMED"
-          export DB_PASSWORD
-
-          ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.env.DB_PASSWORD||""))')
-          echo "::add-mask::$ENC"
-          URL="postgresql://postgres.${PROJECT_REF}:${ENC}@aws-0-${REGION}.pooler.supabase.com:5432/postgres"
-          echo "::add-mask::$URL"
-          echo "DB_URL=$URL" >> $GITHUB_ENV
-          echo "Session pooler, region ${REGION}, user postgres.${PROJECT_REF}"
-          if [ "$ENC" != "$DB_PASSWORD" ]; then
-            echo "NOTE: the password contains characters that required URL encoding."
-            echo "That is handled, but it is also the classic cause of a bogus 28P01."
-          fi
-
-      # Separate from the push so a connection problem is distinguishable from
-      # a SQL problem. Previously both surfaced as one opaque failure.
-      - name: Check database connectivity
-        run: |
-          if psql "$DB_URL" -tAc 'select 1' >/dev/null 2>/tmp/pgerr; then
-            echo "Connected."
-          else
-            echo "Could not connect. Postgres said:"
-            sed -E 's/postgresql:\/\/[^ ]*/<redacted>/g' /tmp/pgerr
-            echo ""
-            echo "28P01 means the password is wrong. Reset it at"
-            echo "  Project Settings -> Database -> Reset database password"
-            echo "and update the SUPABASE_DB_PASSWORD repo secret."
-            exit 1
-          fi
-
-      # Where any SQL problem surfaces.
+      # Where any SQL problem surfaces. Each file is applied in its own
+      # transaction with its bookkeeping row, so a failure rolls that file
+      # back and the run is safe to repeat after a fix.
       - name: Apply migrations
-        run: supabase db push --db-url "$DB_URL"
+        run: node scripts/apply-migrations-api.mjs
 
       # No build step: the shared fee/score bundle at
       # supabase/functions/_shared/outcome-shared.mjs is committed precisely so
       # the functions deploy straight from source.
-      # Migrations and functions authenticate DIFFERENTLY: db push needs the
-      # database password, functions deploy needs only the access token.
-      # Coupling them meant a wrong password blocked both, which is what
-      # happened. `!cancelled()` lets functions deploy even when migrations
-      # failed — the job still reports failure, but one bad credential no
-      # longer holds up the half that does not need it.
+      #
+      # `!cancelled()` lets functions deploy even when migrations failed -- the
+      # job still reports failure, but a SQL error no longer holds up the half
+      # that has nothing to do with it.
       - name: Deploy Edge Functions
         if: ${{ !inputs.migrations_only && !cancelled() }}
-        run: supabase functions deploy
-
-      # A green run is not the same as a working database. Print what the
-      # remote actually has applied, so "success" is backed by evidence
-      # rather than by db push having exited zero.
-      - name: Confirm migrations applied remotely
-        run: |
-          echo '### Migrations on the remote' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          supabase migration list 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Summary
         run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Supabase deploy complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Migrations applied and functions deployed to \`$PROJECT_REF\`." >> $GITHUB_STEP_SUMMARY
+          echo "Functions deployed to \`$SUPABASE_PROJECT_REF\`." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Still to do by hand in the dashboard:" >> $GITHUB_STEP_SUMMARY
+          echo "Still to do by hand in the dashboard, once:" >> $GITHUB_STEP_SUMMARY
           echo "- Vault secrets: \`project_url\`, \`service_role_key\`, \`cron_secret\`" >> $GITHUB_STEP_SUMMARY
           echo "- Edge Function secret: \`CRON_SECRET\` (must match Vault)" >> $GITHUB_STEP_SUMMARY

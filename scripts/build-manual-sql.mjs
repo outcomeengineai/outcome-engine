@@ -8,6 +8,12 @@ import path from 'node:path';
  * database password. Postgres reports errors directly in the editor, which is
  * a much shorter feedback loop than round-tripping through CI logs.
  *
+ * FALLBACK ONLY since the deploy workflow started applying migrations through
+ * the Management API (scripts/apply-migrations-api.mjs). Pushing to main is
+ * now the normal path; this is for when CI itself is the thing that is broken.
+ * Keep APPLIED_THROUGH current if you do use it, or pending.sql will re-include
+ * files the API path has already applied.
+ *
  *   npm run build:manual-sql
  */
 
