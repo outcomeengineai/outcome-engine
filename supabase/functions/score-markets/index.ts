@@ -46,7 +46,25 @@ interface MarketRow {
   id: string;
   question: string;
   category: string;
+  cadence_tier: 'fast' | 'slow' | 'archive' | 'excluded';
 }
+
+/**
+ * Per-tier accounting, so the diagnostic can answer the question that
+ * matters: does drift recover on NEAR-DATED markets, or is it thin everywhere?
+ * An aggregate sepP50 over a mix of tiers cannot tell those apart.
+ */
+interface TierStats {
+  considered: number;
+  skippedNoData: number;
+  belowSurface: number;
+  noDirection: number;
+  scored: number;
+  scores: number[];
+  seps: number[];
+}
+const newTierStats = (): TierStats =>
+  ({ considered: 0, skippedNoData: 0, belowSurface: 0, noDirection: 0, scored: 0, scores: [], seps: [] });
 
 export interface BaseRateStats {
   sampleCount: number;
@@ -162,7 +180,7 @@ Deno.serve(handler(async (req) => {
     (batch) =>
       db
         .from('markets')
-        .select('id, question, category')
+        .select('id, question, category, cadence_tier')
         .in('id', batch)
         .is('resolved_at', null)
         .or(`close_time.is.null,close_time.gt.${now}`),
@@ -222,6 +240,13 @@ Deno.serve(handler(async (req) => {
   // broken. Report the distribution so the threshold can be set from evidence.
   const allScores: number[] = [];
   const allSeparations: number[] = [];
+  const byTier = new Map<string, TierStats>();
+  const tierOf = (m: MarketRow) => {
+    const key = m.cadence_tier ?? 'unknown';
+    let t = byTier.get(key);
+    if (!t) { t = newTierStats(); byTier.set(key, t); }
+    return t;
+  };
 
   /**
    * Minimum gap between the two sides' scores before a market may surface.
@@ -233,9 +258,11 @@ Deno.serve(handler(async (req) => {
   );
 
   for (const market of markets) {
+    const tier = tierOf(market);
+    tier.considered++;
     const hist = history.get(market.id) ?? [];
     const last = hist[hist.length - 1];
-    if (!last) { skippedNoData++; continue; }
+    if (!last) { skippedNoData++; tier.skippedNoData++; continue; }
 
     const micro = microFeatures(hist);
 
@@ -274,11 +301,14 @@ Deno.serve(handler(async (req) => {
 
     allScores.push(winner.score);
     allSeparations.push(Math.abs(yes.score - no.score));
+    tier.scores.push(winner.score);
+    tier.seps.push(Math.abs(yes.score - no.score));
 
     // A market that is weak on BOTH sides simply does not surface. There is
     // deliberately no third "no edge" state to render.
     if (!surfaces(winner.score, thresholds.surface ?? 5)) {
       belowSurface++;
+      tier.belowSurface++;
       continue;
     }
 
@@ -297,9 +327,11 @@ Deno.serve(handler(async (req) => {
     const separation = Math.abs(yes.score - no.score);
     if (separation < minSeparation) {
       noDirection++;
+      tier.noDirection++;
       continue;
     }
 
+    tier.scored++;
     scoreRows.push({
       market_id: market.id,
       model_version_id: version.id,
@@ -394,6 +426,21 @@ Deno.serve(handler(async (req) => {
     scoreMax: allScores.length ? Math.max(...allScores) : null,
     sepP50: pct(allSeparations, 0.5),
     sepMax: allSeparations.length ? Math.max(...allSeparations) : null,
+    // The split that decides whether v1.1 stands or is superseded.
+    byTier: Object.fromEntries(
+      [...byTier.entries()].map(([k, t]) => [k, {
+        considered: t.considered,
+        skippedNoData: t.skippedNoData,
+        belowSurface: t.belowSurface,
+        noDirection: t.noDirection,
+        scored: t.scored,
+        scoreP50: pct(t.scores, 0.5),
+        scoreP90: pct(t.scores, 0.9),
+        sepP50: pct(t.seps, 0.5),
+        sepP90: pct(t.seps, 0.9),
+        sepMax: t.seps.length ? Math.max(...t.seps) : null,
+      }]),
+    ),
     thesesWritten: thesisResult.written,
     thesesUnchanged: thesisResult.unchanged,
     newsFetched: newsResult.fetched,
