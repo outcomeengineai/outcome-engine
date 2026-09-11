@@ -58,6 +58,39 @@ export async function selectInBatches<T>(
 }
 
 /**
+ * PostgREST caps every response at 1,000 rows (max-rows) and says nothing:
+ * `.limit(3000)` returns 1,000 with no error. The slow pricing tier asked for
+ * 2,500 markets and got exactly 1,000 every hour, so each market was priced
+ * every 2.5 hours instead of hourly, and the archive tier would have taken
+ * five days to cycle instead of one. Silent truncation is the failure mode
+ * to trust least, so every select whose row count scales with the data goes
+ * through here.
+ *
+ * Pages with `.range()` until a short page or `max` rows. The callback must
+ * apply a deterministic ORDER BY, or pages can overlap.
+ */
+export const PAGE = 1000;
+
+export async function selectPaged<T>(
+  run: (from: number, to: number) => PromiseLike<Result<T>>,
+  opts: { max?: number; label?: string } = {},
+): Promise<T[]> {
+  const max = opts.max ?? Number.MAX_SAFE_INTEGER;
+  const out: T[] = [];
+
+  for (let from = 0; from < max; from += PAGE) {
+    const to = Math.min(from + PAGE, max) - 1;
+    const { data, error } = await run(from, to);
+    if (error) throw new Error(`${opts.label ?? 'paged select'} failed at rows ${from}-${to}: ${error.message}`);
+    if (!data || data.length === 0) break;
+    out.push(...data);
+    if (data.length < to - from + 1) break;
+  }
+
+  return out;
+}
+
+/**
  * Same batching for writes that filter by a long id list — deletes and
  * updates. Errors are returned rather than thrown, because most callers treat
  * a failed cleanup as a warning rather than a reason to abandon the run.

@@ -18,7 +18,7 @@ import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/htt
 import { getMarket, getSettlements, KalshiError, type KalshiSettlement } from '../_shared/kalshi.ts';
 import { loadKalshiCredentials } from '../_shared/vault.ts';
 import { logActivity, notify, notifyAdmins } from '../_shared/log.ts';
-import { selectInBatches } from '../_shared/batch.ts';
+import { selectInBatches, selectPaged } from '../_shared/batch.ts';
 import { stampFinalThesis } from '../_shared/thesis.ts';
 import { allocateSettlementCents, formatUsd, realizedPnlCents } from '../_shared/outcome-shared.mjs';
 
@@ -45,12 +45,13 @@ Deno.serve(handler(async (req) => {
   // Only markets someone actually holds a position in, plus ones already past
   // their close time. There is no reason to poll settlement for a market no
   // member ever touched.
-  const { data: heldRows } = await db
-    .from('trades')
-    .select('market_id')
-    .in('status', ['open', 'pending']);
+  const heldRows = await selectPaged<{ market_id: string }>(
+    (from, to) =>
+      db.from('trades').select('market_id').in('status', ['open', 'pending']).order('id').range(from, to),
+    { label: 'held markets' },
+  );
 
-  const held = [...new Set((heldRows ?? []).map((r: { market_id: string }) => r.market_id))];
+  const held = [...new Set(heldRows.map((r) => r.market_id))];
 
   const candidates = (await selectInBatches<{ id: string; question: string }>(
     held,
@@ -144,14 +145,20 @@ Deno.serve(handler(async (req) => {
   }
 
   // ---- 3. resolve LIVE trades from each member's own settlements ---------
-  const { data: liveTrades } = await db
-    .from('trades')
-    .select('id, user_id, market_id, mode, side, entry_price, contracts, stake_cents')
-    .eq('mode', 'live')
-    .eq('status', 'open');
+  const liveTrades = await selectPaged<OpenTrade>(
+    (from, to) =>
+      db
+        .from('trades')
+        .select('id, user_id, market_id, mode, side, entry_price, contracts, stake_cents')
+        .eq('mode', 'live')
+        .eq('status', 'open')
+        .order('id')
+        .range(from, to),
+    { label: 'live trades' },
+  );
 
   const byUser = new Map<string, OpenTrade[]>();
-  for (const t of (liveTrades ?? []) as OpenTrade[]) {
+  for (const t of liveTrades) {
     byUser.set(t.user_id, [...(byUser.get(t.user_id) ?? []), t]);
   }
 

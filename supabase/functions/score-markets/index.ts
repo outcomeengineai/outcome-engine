@@ -81,9 +81,14 @@ export interface BaseRateStats {
 async function loadBaseRates(
   db: ReturnType<typeof serviceClient>,
 ): Promise<Map<string, BaseRateStats>> {
+  // Aggregated in SQL (base_rate_stats view). The previous version pulled
+  // every resolved position as a row and tallied here, which PostgREST
+  // silently truncates at 1,000 rows -- an arbitrary subset feeding every
+  // score once members had traded enough. A GROUP BY returns a few dozen
+  // rows no matter how many trades exist.
   const { data, error } = await db
-    .from('resolved_positions')
-    .select('category, side, outcome');
+    .from('base_rate_stats')
+    .select('category, side, wins, total');
 
   const out = new Map<string, BaseRateStats>();
   if (error || !data) {
@@ -91,17 +96,13 @@ async function loadBaseRates(
     return out;
   }
 
-  const tally = new Map<string, { wins: number; total: number }>();
-  for (const row of data as Array<{ category: string; side: string; outcome: string }>) {
-    const key = `${row.category}|${row.side}`;
-    const t = tally.get(key) ?? { wins: 0, total: 0 };
-    t.total++;
-    if (row.outcome === 'win') t.wins++;
-    tally.set(key, t);
-  }
-
-  for (const [key, t] of tally) {
-    out.set(key, { sampleCount: t.total, winRate: t.total ? t.wins / t.total : 0.5 });
+  for (const row of data as Array<{ category: string; side: string; wins: number; total: number }>) {
+    const total = Number(row.total);
+    const wins = Number(row.wins);
+    out.set(`${row.category}|${row.side}`, {
+      sampleCount: total,
+      winRate: total ? wins / total : 0.5,
+    });
   }
   return out;
 }

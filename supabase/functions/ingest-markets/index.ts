@@ -28,7 +28,7 @@ import {
   type KalshiMarket,
 } from '../_shared/kalshi.ts';
 import { logActivity } from '../_shared/log.ts';
-import { forEachBatch } from '../_shared/batch.ts';
+import { forEachBatch, selectPaged } from '../_shared/batch.ts';
 
 type Tier = 'fast' | 'slow' | 'archive';
 
@@ -76,16 +76,22 @@ Deno.serve(handler(async (req) => {
   // ---- the universe for this tier ----------------------------------------
   // Oldest-priced first, so a cap degrades into a rotation rather than
   // permanently starving the tail of the tier.
-  const { data: rows, error: mErr } = await db
-    .from('markets')
-    .select('id')
-    .eq('cadence_tier', tier)
-    .is('resolved_at', null)
-    .order('last_priced_at', { ascending: true, nullsFirst: true })
-    .limit(cap);
-
-  if (mErr) throw new Error(`universe load failed: ${mErr.message}`);
-  const tickers = (rows ?? []).map((r: { id: string }) => r.id);
+  // Paged: PostgREST silently caps a response at 1,000 rows, and this tier
+  // can legitimately hold thousands. Ordering must be deterministic for the
+  // pages not to overlap, so id breaks ties on equal last_priced_at.
+  const rows = await selectPaged<{ id: string }>(
+    (from, to) =>
+      db
+        .from('markets')
+        .select('id')
+        .eq('cadence_tier', tier)
+        .is('resolved_at', null)
+        .order('last_priced_at', { ascending: true, nullsFirst: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { max: cap, label: `${tier} universe` },
+  );
+  const tickers = rows.map((r) => r.id);
 
   if (tickers.length === 0) {
     return json({
