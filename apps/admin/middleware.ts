@@ -10,6 +10,26 @@ import { NextResponse, type NextRequest } from 'next/server';
  * full of empty tables.
  */
 export async function middleware(request: NextRequest) {
+  try {
+    return await guard(request);
+  } catch (err) {
+    // Anything that escapes becomes a readable response instead of Vercel's
+    // MIDDLEWARE_INVOCATION_FAILED, which names neither the cause nor the fix.
+    // Nothing secret is printed: the message and the top of the stack only.
+    const e = err as Error;
+    const where = (e.stack ?? '').split('\n').slice(1, 4).join('\n');
+    return new NextResponse(
+      `Outcome Engine admin: middleware failed.
+
+${e.name}: ${e.message}
+${where}
+`,
+      { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } },
+    );
+  }
+}
+
+async function guard(request: NextRequest) {
   // Fail LEGIBLY. With the non-null assertions this used to carry, a missing
   // env var made createServerClient throw, and every route on the deployment
   // answered 500 MIDDLEWARE_INVOCATION_FAILED -- which says nothing about
