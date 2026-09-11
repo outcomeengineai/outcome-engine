@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { currentProfile, serverClient } from '@/lib/supabase';
-import { NavItem } from './nav';
+import { Suspense } from 'react';
+import { currentProfile } from '@/lib/supabase';
+import { SidebarNav, SidebarNavWithBadges } from './sidebar-nav';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,16 +32,6 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
     );
   }
 
-  // Two badges the admin should never have to go looking for.
-  const db = await serverClient();
-  const [{ count: pendingFees }, { data: degraded }] = await Promise.all([
-    db
-      .from('billing_periods')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['invoiced', 'grace', 'failed']),
-    db.from('signal_health').select('signal').neq('status', 'healthy'),
-  ]);
-
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -49,23 +40,12 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
         </Link>
         <div className="eyebrow" style={{ marginTop: 5 }}>Admin</div>
 
-        <nav className="nav">
-          <NavItem href="/">Home</NavItem>
-          <NavItem href="/desk">Decision Desk</NavItem>
-          <NavItem href="/positions">Positions</NavItem>
-
-          <div className="nav-group eyebrow">Model</div>
-          <NavItem href="/strategy" badge={degraded?.length ? degraded.length : undefined}>
-            Strategy
-          </NavItem>
-          <NavItem href="/simulate">Simulate</NavItem>
-          <NavItem href="/tags">Tag review</NavItem>
-
-          <div className="nav-group eyebrow">Platform</div>
-          <NavItem href="/accounts" badge={pendingFees || undefined}>Accounts</NavItem>
-          <NavItem href="/activity">Activity</NavItem>
-          <NavItem href="/settings">Settings</NavItem>
-        </nav>
+        {/* The two badges are the only data the shell needs, and the shell
+            should never wait on them: Suspense streams them in after the nav
+            has painted, so a tab click shows the frame immediately. */}
+        <Suspense fallback={<SidebarNav />}>
+          <SidebarNavWithBadges />
+        </Suspense>
 
         <div className="divider" />
         <div className="hint">

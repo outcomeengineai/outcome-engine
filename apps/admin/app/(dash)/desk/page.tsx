@@ -13,19 +13,20 @@ export const dynamic = 'force-dynamic';
 export default async function DeskPage() {
   const db = await serverClient();
 
-  const { data: { user } } = await db.auth.getUser();
-  const { data: versionId } = await db.rpc('effective_version_for', { p_user: user!.id });
-
-  const [{ data: rows }, { data: version }, { data: tags }] = await Promise.all([
-    db.from('decision_desk')
+  // One round-trip for the desk. my_decision_desk resolves the caller's
+  // effective version in SQL and carries version_label + thresholds on every
+  // row, replacing getUser -> effective_version_for -> decision_desk ->
+  // model_versions: four sequential hops, each a Vercel-to-Supabase call.
+  const [{ data: rows }, { data: tags }] = await Promise.all([
+    db.from('my_decision_desk')
       .select('*')
-      .eq('model_version_id', versionId)
       .order('score', { ascending: false })
       .limit(60),
-    db.from('model_versions').select('version_label, thresholds').eq('id', versionId).maybeSingle(),
     db.from('tags').select('market_id, text, severity').not('market_id', 'is', null).limit(400),
   ]);
 
+  const first = (rows ?? [])[0] as { version_label?: string; thresholds?: Thresholds } | undefined;
+  const version = first ? { version_label: first.version_label, thresholds: first.thresholds } : null;
   const thresholds = (version?.thresholds ?? { strongPick: 7 }) as Thresholds;
 
   const tagsByMarket = new Map<string, Array<{ text: string; severity: string }>>();

@@ -2,6 +2,7 @@ import 'server-only';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { supabaseAnonKey, supabaseUrl } from './supabase-env';
+import { cache } from 'react';
 
 /**
  * Supabase clients for the admin dashboard.
@@ -49,9 +50,15 @@ export interface AdminProfile {
  * this exists for the layout, which must render for members too (an admin is
  * also a member of their own platform).
  */
-export async function currentProfile(): Promise<AdminProfile | null> {
+export const currentUser = cache(async () => {
   const db = await serverClient();
   const { data: { user } } = await db.auth.getUser();
+  return user;
+});
+
+export const currentProfile = cache(async (): Promise<AdminProfile | null> => {
+  const db = await serverClient();
+  const user = await currentUser();
   if (!user) return null;
 
   const { data } = await db
@@ -61,4 +68,4 @@ export async function currentProfile(): Promise<AdminProfile | null> {
     .single();
 
   return (data as AdminProfile) ?? null;
-}
+});
