@@ -170,6 +170,11 @@ Deno.serve(handler(async (req) => {
             question: (m.title ?? '').trim() || event.title || m.ticker,
             category,
             close_time: m.close_time ?? null,
+            // When the market is EXPECTED to end. close_time is a contractual
+            // deadline that can sit days later; a finalized market leaves this
+            // feed, so the corrected close_time is never seen here. Horizon is
+            // measured to this field.
+            expected_close: (m as { expected_expiration_time?: string }).expected_expiration_time ?? null,
             status: m.status ?? null,
             family: classifyFamily(event, m, sel),
             anchorable: isAnchorable,
