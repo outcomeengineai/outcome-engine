@@ -22,8 +22,21 @@ import { forEachBatch, selectInBatches, selectPaged } from '../_shared/batch.ts'
 import { stampFinalThesis } from '../_shared/thesis.ts';
 import { allocateSettlementCents, formatUsd, realizedPnlCents } from '../_shared/outcome-shared.mjs';
 
-/** Past-close markets checked per pass; held markets are always included on top. */
-const MARKET_BATCH = 400;
+/**
+ * Markets checked for settlement per pass, on top of any that are held.
+ *
+ * Two populations. Markets past their close, oldest first. And markets that
+ * have LEFT the open discovery feed while still unresolved here: a market
+ * disappears from the feed when Kalshi finalizes it, and its stored dates
+ * can sit days or years in the future -- Kalshi does not update
+ * expected_expiration_time on an early finalization. 126,000 of those had
+ * accumulated. Fetched as an exact set, 3,000 is ~20 requests; the backlog
+ * clears in a couple of days and the steady state is a few hundred an hour.
+ */
+const MARKET_BATCH = 3000;
+
+/** Not seen by discovery for this long means not in the open feed. */
+const STALE_HOURS = 2;
 
 interface OpenTrade {
   id: string;
@@ -67,21 +80,43 @@ Deno.serve(handler(async (req) => {
     { label: 'held candidates' },
   );
 
+  const nowIso = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
+
   const pastClose = await selectPaged<{ id: string }>(
     (from, to) =>
       db
         .from('markets')
         .select('id')
         .is('resolved_at', null)
-        .not('last_snapshot_at', 'is', null)
-        .lt('close_time', new Date().toISOString())
+        .lt('close_time', nowIso)
         .order('close_time', { ascending: true })
         .order('id')
         .range(from, to),
     { max: MARKET_BATCH, label: 'past-close candidates' },
   );
 
-  const candidateIds = [...new Set([...heldOpen.map((m) => m.id), ...pastClose.map((m) => m.id)])];
+  // Left the open feed but not yet resolved here: check them regardless of
+  // what their stored dates claim. Oldest sighting first.
+  const remaining = Math.max(0, MARKET_BATCH - pastClose.length);
+  const unseen = remaining === 0 ? [] : await selectPaged<{ id: string }>(
+    (from, to) =>
+      db
+        .from('markets')
+        .select('id')
+        .is('resolved_at', null)
+        .lt('disc_seen_at', staleBefore)
+        .order('disc_seen_at', { ascending: true })
+        .order('id')
+        .range(from, to),
+    { max: remaining, label: 'unseen candidates' },
+  );
+
+  const candidateIds = [...new Set([
+    ...heldOpen.map((m) => m.id),
+    ...pastClose.map((m) => m.id),
+    ...unseen.map((m) => m.id),
+  ])];
 
   let marketsResolved = 0;
   let stillOpen = 0;
