@@ -1,0 +1,25 @@
+name: Platform status
+
+# Read-only health check, on demand. Runs a fixed set of SELECTs through the
+# Management API with the same access token the deploy uses, and writes the
+# results to the job summary. One click instead of pasting SQL into the
+# Supabase editor and the result back into a chat.
+#
+# Nothing here writes to the database.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read platform status
+        run: node scripts/platform-status.mjs
