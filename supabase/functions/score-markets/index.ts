@@ -215,6 +215,29 @@ Deno.serve(handler(async (req) => {
   }
   const ids = markets.map((m) => m.id);
 
+  // What each market scored LAST time under this version. A pass writes a
+  // score row only when something changed -- side, or score by at least
+  // SCORE_WRITE_DELTA -- or when the last row is older than the heartbeat.
+  // Writing every pass regardless was ~230k rows a day of "still 6.3", and
+  // it is what filled the database. The heartbeat keeps the Decision Desk's
+  // freshness rule (latest score under two hours old) satisfied for a market
+  // that simply has not moved.
+  const SCORE_WRITE_DELTA = 0.1;
+  const HEARTBEAT_MS = 55 * 60_000;
+  const previous = new Map<string, { side: string; score: number; ts: string }>();
+  const prevRows = await selectInBatches<{ market_id: string; side: string; score: number; ts: string }>(
+    ids,
+    (batch) =>
+      db
+        .from('market_latest_scores')
+        .select('market_id, side, score, ts')
+        .eq('model_version_id', version.id)
+        .in('market_id', batch),
+    { label: 'previous scores' },
+  );
+  for (const r of prevRows) previous.set(r.market_id, r);
+  let unchangedSkipped = 0;
+
   if (markets.length === 0) {
     return json({ ok: true, scored: 0, reason: 'no open markets among candidates' });
   }
@@ -376,7 +399,14 @@ Deno.serve(handler(async (req) => {
     }
 
     tier.scored++;
-    scoreRows.push({
+
+    const prev = previous.get(market.id);
+    const unchanged = prev !== undefined
+      && prev.side === side
+      && Math.abs(Number(prev.score) - winner.score) < SCORE_WRITE_DELTA
+      && Date.now() - new Date(prev.ts).getTime() < HEARTBEAT_MS;
+    if (unchanged) { unchangedSkipped++; }
+    else scoreRows.push({
       market_id: market.id,
       model_version_id: version.id,
       ts,
@@ -462,6 +492,7 @@ Deno.serve(handler(async (req) => {
     considered: markets.length,
     candidates: ids.length,
     scored: scoreRows.length,
+    unchangedSkipped,
     tags: tagRows.length,
     belowSurface,
     noDirection,

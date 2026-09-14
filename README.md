@@ -307,3 +307,21 @@ Follow the build brief's order — it is right, and step 8 in particular:
 
 Model comparison beyond Simulate's two-curve overlay · auto-adjusting weights ·
 per-category signal health · usage tiers · Polymarket.
+
+### Database size and retention
+
+Raw 5-minute snapshots are kept 5 days (then rolled up daily), scores 3 days,
+activity 14 days, pg_cron run logs 2 days. The prune runs every six hours
+(`rollup_and_prune_snapshots`). Retention windows are `platform_settings`
+keys and can be changed without a deploy.
+
+Deleting rows does not shrink the database on disk; Postgres reuses the space
+but the reported size stays. After a large prune -- or if the project has hit
+its size limit -- run once, in the SQL editor:
+
+    vacuum full public.market_snapshots;
+    vacuum full public.scores;
+
+If the project is already in read-only mode, prefix the session with
+`set default_transaction_read_only = off;` before pruning and vacuuming.
+Migrations cannot apply while the project is read-only, so this comes first.
