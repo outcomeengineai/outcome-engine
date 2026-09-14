@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { serverClient } from '@/lib/supabase';
 import type { RiskLimits, Thresholds, WeightConfig } from '@outcome/shared';
+import { supabaseUrl } from '@/lib/supabase-env';
 
 async function adminClient() {
   const db = await serverClient();
@@ -88,20 +89,25 @@ export async function publishVersion(modelVersionId: string) {
   const { data: { session } } = await db.auth.getSession();
   if (!session) throw new Error('not signed in');
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/publish-model`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ modelVersionId }),
+  // supabaseUrl(), not the raw env: the raw value in Vercel carried its own
+  // variable name as a prefix, the client-creation path forgave it, and this
+  // fetch did not -- so Publish threw "Invalid URL" behind a redacted server
+  // action error. Every outbound URL goes through the normaliser.
+  const res = await fetch(`${supabaseUrl()}/functions/v1/publish-model`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
     },
-  );
+    body: JSON.stringify({ modelVersionId }),
+  });
 
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? 'publish failed');
+  // Read as text first: a gateway error page is HTML, and res.json() on it
+  // would replace the real failure with a JSON parse error.
+  const text = await res.text();
+  let body: { error?: string } & Record<string, unknown> = {};
+  try { body = JSON.parse(text); } catch { body = { error: text.slice(0, 300) }; }
+  if (!res.ok) throw new Error(body.error ?? `publish failed (HTTP ${res.status})`);
 
   revalidatePath('/strategy');
   revalidatePath('/');

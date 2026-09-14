@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { serverClient } from '@/lib/supabase';
+import { supabaseUrl } from '@/lib/supabase-env';
 
 /**
  * Kick off a backtest.
@@ -21,7 +22,7 @@ export async function runBacktest(params: {
   if (!session) throw new Error('not signed in');
 
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/run-backtest`,
+    `${supabaseUrl()}/functions/v1/run-backtest`,
     {
       method: 'POST',
       headers: {
