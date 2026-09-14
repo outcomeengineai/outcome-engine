@@ -121,7 +121,7 @@ Deno.serve(handler(async (req) => {
 
   const now = new Date().toISOString();
   const snapshotRows: Record<string, unknown>[] = [];
-  const resolvedNow: string[] = [];
+  const resolvedNow: Array<{ id: string; status: string }> = [];
   let skippedNoPrice = 0;
 
   for (const m of fetched) {
@@ -129,7 +129,7 @@ Deno.serve(handler(async (req) => {
 
     // A market that settled between discovery passes should stop being priced.
     if (m.status === 'settled' || m.status === 'finalized') {
-      resolvedNow.push(m.ticker);
+      resolvedNow.push({ id: m.ticker, status: m.status });
       continue;
     }
 
@@ -166,10 +166,16 @@ Deno.serve(handler(async (req) => {
 
   // Settled markets leave the priced universe; sync-resolutions handles the
   // trades. Membership is closed so the point-in-time record stays honest.
+  // The STATUS is stamped too, not just the tier: the desk filters on it, so
+  // a finished game disappears within one pricing pass instead of lingering
+  // with its last confident score until the resolution queue reaches it.
   if (resolvedNow.length) {
-    await forEachBatch(resolvedNow, (batch) =>
-      db.from('markets').update({ cadence_tier: 'excluded', tier_reason: 'settled' }).in('id', batch));
-    await forEachBatch(resolvedNow, (batch) =>
+    for (const status of [...new Set(resolvedNow.map((r) => r.status))]) {
+      const ids = resolvedNow.filter((r) => r.status === status).map((r) => r.id);
+      await forEachBatch(ids, (batch) =>
+        db.from('markets').update({ cadence_tier: 'excluded', tier_reason: 'settled', status }).in('id', batch));
+    }
+    await forEachBatch(resolvedNow.map((r) => r.id), (batch) =>
       db.from('universe_membership').update({ left_at: now }).is('left_at', null).in('market_id', batch));
   }
 

@@ -83,6 +83,22 @@ Deno.serve(handler(async (req) => {
   const nowIso = new Date().toISOString();
   const staleBefore = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
 
+  // Flagged by ingestion or discovery as finalized/settled but not yet
+  // resolved here. These are the priced universe's own outcomes -- the
+  // learning loop's labels -- so they go first, ahead of the stale backlog.
+  const flagged = await selectPaged<{ id: string }>(
+    (from, to) =>
+      db
+        .from('markets')
+        .select('id')
+        .is('resolved_at', null)
+        .in('status', ['finalized', 'settled'])
+        .order('updated_at', { ascending: false })
+        .order('id')
+        .range(from, to),
+    { max: MARKET_BATCH, label: 'flagged candidates' },
+  );
+
   const pastClose = await selectPaged<{ id: string }>(
     (from, to) =>
       db
@@ -98,7 +114,7 @@ Deno.serve(handler(async (req) => {
 
   // Left the open feed but not yet resolved here: check them regardless of
   // what their stored dates claim. Oldest sighting first.
-  const remaining = Math.max(0, MARKET_BATCH - pastClose.length);
+  const remaining = Math.max(0, MARKET_BATCH - flagged.length - pastClose.length);
   const unseen = remaining === 0 ? [] : await selectPaged<{ id: string }>(
     (from, to) =>
       db
@@ -114,6 +130,7 @@ Deno.serve(handler(async (req) => {
 
   const candidateIds = [...new Set([
     ...heldOpen.map((m) => m.id),
+    ...flagged.map((m) => m.id),
     ...pastClose.map((m) => m.id),
     ...unseen.map((m) => m.id),
   ])];
