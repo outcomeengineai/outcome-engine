@@ -66,6 +66,9 @@ verify_jwt = true
 [functions.signal-health]
 verify_jwt = true
 
+[functions.model-review-digest]
+verify_jwt = true
+
 [functions.connect-kalshi]
 verify_jwt = true
 

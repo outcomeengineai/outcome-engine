@@ -1647,6 +1647,22 @@ $fn$;
 grant execute on function public.calibration_recommendations(uuid) to authenticated;
 
 
+-- ===== 20260823002900_digest_cron.sql ==============================
+
+-- ===========================================================================
+-- Weekly model review digest to admins.
+--
+-- Mondays 14:00 UTC (morning in the US), after the weekend's sports markets
+-- have resolved and been labelled. The digest reports what the calibration
+-- SQL concluded -- edge bands, suggested thresholds, or "not enough
+-- evidence" -- and never changes anything: a version change is a decision.
+-- ===========================================================================
+select cron.schedule(
+  'oe-model-review-digest', '0 14 * * 1',
+  $cron$ select public.invoke_edge_function('model-review-digest'); $cron$
+);
+
+
 -- ===== record these migrations as applied =========================
 create schema if not exists supabase_migrations;
 
@@ -1671,7 +1687,8 @@ values
   ('20260823002500'),
   ('20260823002600'),
   ('20260823002700'),
-  ('20260823002800')
+  ('20260823002800'),
+  ('20260823002900')
 on conflict (version) do nothing;
 
 commit;
