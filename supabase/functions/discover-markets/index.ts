@@ -189,6 +189,12 @@ Deno.serve(handler(async (req) => {
 
       marketsSeen += rows.length;
 
+      // Deterministic write order. Two multi-row statements that lock the
+      // same rows in different orders can deadlock; discovery's upsert and
+      // the pricing job's updates both touch markets. Sorting each page by
+      // id makes discovery's order fixed, which removes one side of that.
+      rows.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
       // Write this page before fetching the next, so nothing accumulates.
       // cadence_tier is deliberately NOT in the payload: an upsert must never
       // reset a tier that assign_cadence_tiers already decided.
