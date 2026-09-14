@@ -111,11 +111,13 @@ export function SimulateWorkspace({
                     rangeStart: new Date(rangeStart).toISOString(),
                     rangeEnd: new Date(`${rangeEnd}T23:59:59Z`).toISOString(),
                   });
-                  if (r.tradeCount === 0 && !r.draft) {
-                    setError(r.note ?? 'No resolved markets in that range.');
+                  if ('ok' in r && r.ok === false) { setError(String(r.error)); return; }
+                  const out = r as unknown as Result & { note?: string; tradeCount?: number; draft?: unknown };
+                  if (out.tradeCount === 0 && !out.draft) {
+                    setError(out.note ?? 'No resolved markets in that range.');
                     return;
                   }
-                  setResult(r as Result);
+                  setResult(out);
                 } catch (e) {
                   setError(e instanceof Error ? e.message : String(e));
                 }

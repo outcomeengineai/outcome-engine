@@ -2,6 +2,9 @@ import { serverClient } from '@/lib/supabase';
 import { StrategyWorkspace } from './client';
 
 export const dynamic = 'force-dynamic';
+// Server actions on this route call Edge Functions that can run for tens of
+// seconds; the default action budget is shorter than that.
+export const maxDuration = 60;
 
 export default async function StrategyPage() {
   const db = await serverClient();

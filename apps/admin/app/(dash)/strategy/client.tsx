@@ -438,6 +438,7 @@ function ConfigureFlow({
                       const row = await persist();
                       if (!confirm(`Publish ${row.version_label}? Members are notified and all open markets are re-scored.`)) return;
                       const result = await publishVersion(row.id);
+                      if (!result.ok) { setError(result.error); return; }
                       setMessage(
                         `Published ${row.version_label}. ${result.materiallyChanged} open trade(s) changed materially; ${result.notified} notification(s) sent.`,
                       );
@@ -505,6 +506,7 @@ function ConfigureFlow({
                               if (!confirm(`Publish ${v.version_label}?`)) return;
                               try {
                                 const r = await publishVersion(v.id);
+                                if (!r.ok) { setError(r.error); return; }
                                 setMessage(`Published ${v.version_label}. ${r.notified} notification(s) sent.`);
                               } catch (e) {
                                 setError(e instanceof Error ? e.message : String(e));

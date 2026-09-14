@@ -84,10 +84,21 @@ export async function saveDraft(config: {
  * members whose open trades moved — work that does not belong in a request
  * handler here.
  */
-export async function publishVersion(modelVersionId: string) {
+export type PublishResult =
+  | { ok: true; materiallyChanged: number; notified: number; [k: string]: unknown }
+  | { ok: false; error: string };
+
+/**
+ * Returns failures rather than throwing them. Next strips the message from
+ * any error thrown inside a server action in production and shows a digest
+ * instead; for a single-admin dashboard that hid the real cause of a failed
+ * publish behind boilerplate. A returned error reaches the screen intact.
+ */
+export async function publishVersion(modelVersionId: string): Promise<PublishResult> {
+  try {
   const db = await serverClient();
   const { data: { session } } = await db.auth.getSession();
-  if (!session) throw new Error('not signed in');
+  if (!session) return { ok: false, error: 'not signed in' };
 
   // supabaseUrl(), not the raw env: the raw value in Vercel carried its own
   // variable name as a prefix, the client-creation path forgave it, and this
@@ -107,11 +118,14 @@ export async function publishVersion(modelVersionId: string) {
   const text = await res.text();
   let body: { error?: string } & Record<string, unknown> = {};
   try { body = JSON.parse(text); } catch { body = { error: text.slice(0, 300) }; }
-  if (!res.ok) throw new Error(body.error ?? `publish failed (HTTP ${res.status})`);
+  if (!res.ok) return { ok: false, error: body.error ?? `publish failed (HTTP ${res.status})` };
 
   revalidatePath('/strategy');
   revalidatePath('/');
-  return body;
+  return { ok: true, materiallyChanged: 0, notified: 0, ...body };
+  } catch (err) {
+    return { ok: false, error: `publish failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 export async function deleteDraft(id: string) {

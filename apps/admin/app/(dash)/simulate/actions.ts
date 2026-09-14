@@ -33,8 +33,11 @@ export async function runBacktest(params: {
     },
   );
 
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? 'backtest failed');
+  const text = await res.text();
+  let body: { error?: string } & Record<string, unknown> = {};
+  try { body = JSON.parse(text); } catch { body = { error: text.slice(0, 300) }; }
+  // Returned, not thrown: a thrown error's message is stripped in production.
+  if (!res.ok) return { ok: false as const, error: body.error ?? `backtest failed (HTTP ${res.status})` };
 
   revalidatePath('/simulate');
   return body;

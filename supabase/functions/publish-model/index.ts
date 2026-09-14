@@ -95,19 +95,42 @@ Deno.serve(handler(async (req) => {
   if (!published) badRequest('model version not found');
 
   // ---- re-score under the new weights ------------------------------------
-  const scoreRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/score-markets`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-      'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
-    },
-    body: JSON.stringify({}),
-  });
+  // Only the markets members actually HOLD, and only if there are any. This
+  // used to re-score the whole universe synchronously and wait: cheap when a
+  // pass touched 400 markets on stale data, but a full fast-tier pass now
+  // runs 20-30 seconds -- longer than the dashboard's server action may
+  // live, so Publish timed out behind a redacted error. The scheduled pass
+  // scores everything under the new version within five minutes regardless;
+  // what cannot wait is the "your open trade moved" notice, and that needs
+  // only the held markets. Bounded by a timeout: a slow re-score degrades to
+  // "no notices this time", never to a failed publish.
+  const heldMarketIds = [...new Set(trades.map((t) => t.market_id))];
+  let scoreResult: { ok: boolean; error?: string; scored?: number; skipped?: string } =
+    { ok: true, scored: 0, skipped: 'no open trades' };
 
-  const scoreResult = scoreRes.ok
-    ? await scoreRes.json()
-    : { ok: false, error: await scoreRes.text() };
+  if (heldMarketIds.length) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20_000);
+    try {
+      const scoreRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/score-markets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
+        },
+        body: JSON.stringify({ marketIds: heldMarketIds }),
+        signal: ctl.signal,
+      });
+      scoreResult = scoreRes.ok
+        ? await scoreRes.json()
+        : { ok: false, error: await scoreRes.text() };
+    } catch (err) {
+      scoreResult = { ok: false, error: `re-score skipped: ${err instanceof Error ? err.message : String(err)}` };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   // ---- notify holders of materially-changed open trades ------------------
   const thresholds = (published.thresholds ?? {}) as Thresholds;
