@@ -16,14 +16,7 @@
  * calibration later.
  */
 
-import {
-  badRequest,
-  handler,
-  json,
-  readJson,
-  requireAdmin,
-  serviceClient,
-} from '../_shared/http.ts';
+import { badRequest, handler, json, readJson, requireAdmin, serviceClient, userClient } from '../_shared/http.ts';
 import { logActivity, notifyMany } from '../_shared/log.ts';
 import { selectInBatches } from '../_shared/batch.ts';
 import {
@@ -88,7 +81,9 @@ Deno.serve(handler(async (req) => {
   // ---- publish -----------------------------------------------------------
   // The SQL function re-checks admin rights itself, so this is not the only
   // gate — it is the convenient one.
-  const { data: published, error: pErr } = await db.rpc('publish_model_version', {
+  // As the admin, not as the platform: the SQL function checks is_admin()
+  // on the CALLER, and the service client has no caller.
+  const { data: published, error: pErr } = await userClient(req).rpc('publish_model_version', {
     p_version: body.modelVersionId,
   });
   if (pErr) throw new Error(`publish failed: ${pErr.message}`);

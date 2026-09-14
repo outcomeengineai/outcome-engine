@@ -48,6 +48,26 @@ export function serviceClient(): SupabaseClient {
 }
 
 /**
+ * A client that acts AS THE CALLER: anon key plus the request's own bearer
+ * token, so auth.uid() resolves inside SQL and RLS.
+ *
+ * Needed for any SQL function that checks who is calling. publish_model_version
+ * verifies is_admin() itself; invoked through the service client there is no
+ * caller, so it refused an admin who had already passed requireAdmin() --
+ * "only an admin may publish a model version", to the admin. The service
+ * client is for what the platform does; this is for what a person does.
+ */
+export function userClient(req: Request): SupabaseClient {
+  const auth = req.headers.get('Authorization') ?? '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!anonKey) throw new Error('SUPABASE_ANON_KEY is not set');
+  return createClient(SUPABASE_URL(), anonKey, {
+    global: { headers: { Authorization: auth } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/**
  * Resolve the calling member from their bearer token, then load their profile
  * with the service client. Two steps on purpose: the token proves identity,
  * the service client reads role/status without depending on RLS being right.
