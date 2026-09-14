@@ -133,3 +133,28 @@ test('end to end: two trades on one market bill on their combined real PnL', () 
   // And the fee follows from that combined figure, not a doubled one.
   assert.equal(periodTotals([pnlA, pnlB], 0.2).feeOwed, 360);
 });
+
+const fees = await import('../dist/index.js');
+
+test('Kalshi fee: 7% of p(1-p) per contract, rounded up, symmetric in price', () => {
+  assert.equal(fees.kalshiFeeCents(50), 2);       // 1.75c -> 2c
+  assert.equal(fees.kalshiFeeCents(30), 2);       // 1.47c -> 2c
+  assert.equal(fees.kalshiFeeCents(70), 2);       // symmetric with 30
+  assert.equal(fees.kalshiFeeCents(95), 1);       // 0.33c -> 1c
+  assert.equal(fees.kalshiFeeCents(50, 10), 18);  // 17.5c -> 18c, rounded once per order
+});
+
+test('breakeven is above the price: a 60c side must be right more than 60% of the time', () => {
+  const be = fees.breakevenHitRate(60);
+  assert.ok(be > 0.60 && be < 0.63, String(be));
+  // Exactly breakeven has ~zero expectation; above it is edge; below it is loss.
+  assert.ok(Math.abs(fees.expectedNetCents(60, be)) < 1e-9);
+  assert.ok(fees.expectedNetCents(60, 0.70) > 0);
+  assert.ok(fees.expectedNetCents(60, 0.55) < 0);
+});
+
+test('a 55% hit rate at 60c loses money after fees -- the number a gross view hides', () => {
+  assert.ok(fees.expectedNetCents(60, 0.55) < 0);
+  assert.equal(fees.netIfHitCents(60), 100 - 60 - fees.kalshiFeeCents(60));
+  assert.equal(fees.netIfMissCents(60), -60 - fees.kalshiFeeCents(60));
+});

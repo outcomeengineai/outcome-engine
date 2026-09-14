@@ -159,4 +159,42 @@ export function formatUsd(cents, opts = {}) {
 export function formatPriceCents(cents) {
     return `${Math.round(cents)}¢`;
 }
+// ---------------------------------------------------------------------------
+// Kalshi's trading fee, and what a call is worth net of it.
+//
+// Every profit figure on the platform was GROSS until this existed. That is
+// not a rounding error: at 60c a side has to be right more than 61.4% of the
+// time just to break even, and a hit rate that looks like edge at a glance
+// can be a steady loss after fees. Calibration is measured net.
+// ---------------------------------------------------------------------------
+/** Kalshi's general trading fee rate: 7% of price x (1 - price), per contract. */
+export const KALSHI_FEE_RATE = 0.07;
+/**
+ * Trading fee in cents for `contracts` at `priceCents`, rounded UP to the
+ * cent as Kalshi does per order. Symmetric in price: a 30c YES and a 70c NO
+ * pay the same.
+ */
+export function kalshiFeeCents(priceCents, contracts = 1) {
+    const p = priceCents / 100;
+    return Math.ceil(KALSHI_FEE_RATE * contracts * p * (1 - p) * 100);
+}
+/** Net P&L per contract if the side paid `priceCents` wins: payout minus cost minus fee. */
+export function netIfHitCents(priceCents) {
+    return PAYOUT_PER_CONTRACT_CENTS - priceCents - kalshiFeeCents(priceCents);
+}
+/** Net P&L per contract if it loses: the whole price, plus the fee. */
+export function netIfMissCents(priceCents) {
+    return -priceCents - kalshiFeeCents(priceCents);
+}
+/**
+ * The hit rate a side must exceed at this price to make money after fees.
+ * This is the bar calibration measures the model against -- not 50%.
+ */
+export function breakevenHitRate(priceCents) {
+    return (priceCents + kalshiFeeCents(priceCents)) / PAYOUT_PER_CONTRACT_CENTS;
+}
+/** Expected net P&L per contract given a hit rate. Positive is edge. */
+export function expectedNetCents(priceCents, hitRate) {
+    return hitRate * netIfHitCents(priceCents) + (1 - hitRate) * netIfMissCents(priceCents);
+}
 //# sourceMappingURL=money.js.map

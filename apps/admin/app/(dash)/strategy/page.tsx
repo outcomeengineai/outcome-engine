@@ -1,5 +1,6 @@
 import { serverClient } from '@/lib/supabase';
 import { StrategyWorkspace } from './client';
+import { ModelReview } from './model-review';
 
 export const dynamic = 'force-dynamic';
 // Server actions on this route call Edge Functions that can run for tens of
@@ -34,7 +35,9 @@ export default async function StrategyPage() {
   ) as Record<string, number>;
 
   return (
-    <StrategyWorkspace
+    <>
+      <ModelReview />
+      <StrategyWorkspace
       stable={stable}
       drafts={drafts}
       allVersions={versions ?? []}
@@ -42,6 +45,7 @@ export default async function StrategyPage() {
       signalHistory={history ?? []}
       rules={rules}
       categories={[...seen].sort()}
-    />
+      />
+    </>
   );
 }

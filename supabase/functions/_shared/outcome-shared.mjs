@@ -102,6 +102,23 @@ function formatUsd(cents, opts = {}) {
 function formatPriceCents(cents) {
   return `${Math.round(cents)}\xA2`;
 }
+var KALSHI_FEE_RATE = 0.07;
+function kalshiFeeCents(priceCents, contracts = 1) {
+  const p = priceCents / 100;
+  return Math.ceil(KALSHI_FEE_RATE * contracts * p * (1 - p) * 100);
+}
+function netIfHitCents(priceCents) {
+  return PAYOUT_PER_CONTRACT_CENTS - priceCents - kalshiFeeCents(priceCents);
+}
+function netIfMissCents(priceCents) {
+  return -priceCents - kalshiFeeCents(priceCents);
+}
+function breakevenHitRate(priceCents) {
+  return (priceCents + kalshiFeeCents(priceCents)) / PAYOUT_PER_CONTRACT_CENTS;
+}
+function expectedNetCents(priceCents, hitRate) {
+  return hitRate * netIfHitCents(priceCents) + (1 - hitRate) * netIfMissCents(priceCents);
+}
 
 // src/score.ts
 var SCORE_MIN = 1;
@@ -216,6 +233,7 @@ export {
   FONTS,
   GRADIENT_CSS,
   GRADIENT_STOPS,
+  KALSHI_FEE_RATE,
   MATERIAL_SCORE_DELTA,
   PAYOUT_PER_CONTRACT_CENTS,
   SCORE_MAX,
@@ -226,14 +244,19 @@ export {
   SIGNAL_LABELS,
   activeWeights,
   allocateSettlementCents,
+  breakevenHitRate,
   clampScore,
   combineSignals,
+  expectedNetCents,
   feeOnNetPnlCents,
   formatPriceCents,
   formatScore,
   formatUsd,
   hasOverride,
   isStrongPick,
+  kalshiFeeCents,
+  netIfHitCents,
+  netIfMissCents,
   payoutCents,
   periodTotals,
   pickSide,

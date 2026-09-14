@@ -429,6 +429,15 @@ Deno.serve(handler(async (req) => {
         side,
         separation: Number(separation.toFixed(2)),
         breakdown: winner.breakdown,
+        // What a member would have paid for the model's side at this moment,
+        // and where the market sat in the universe. The label written at
+        // resolution copies this payload, so each labelled example carries
+        // its own economics: calibration is measured net of fees at the
+        // entry price, not as a bare hit rate.
+        price: sidePrice(last.price, side),
+        yesPrice: last.price,
+        tier: market.cadence_tier,
+        category: market.category,
       },
     });
 

@@ -275,6 +275,25 @@ export declare function formatUsd(cents: number, opts?: {
 }): string;
 /** Format a contract price for display: 71 -> "71¢". */
 export declare function formatPriceCents(cents: number): string;
+/** Kalshi's general trading fee rate: 7% of price x (1 - price), per contract. */
+export declare const KALSHI_FEE_RATE = 0.07;
+/**
+ * Trading fee in cents for `contracts` at `priceCents`, rounded UP to the
+ * cent as Kalshi does per order. Symmetric in price: a 30c YES and a 70c NO
+ * pay the same.
+ */
+export declare function kalshiFeeCents(priceCents: number, contracts?: number): number;
+/** Net P&L per contract if the side paid `priceCents` wins: payout minus cost minus fee. */
+export declare function netIfHitCents(priceCents: number): number;
+/** Net P&L per contract if it loses: the whole price, plus the fee. */
+export declare function netIfMissCents(priceCents: number): number;
+/**
+ * The hit rate a side must exceed at this price to make money after fees.
+ * This is the bar calibration measures the model against -- not 50%.
+ */
+export declare function breakevenHitRate(priceCents: number): number;
+/** Expected net P&L per contract given a hit rate. Positive is edge. */
+export declare function expectedNetCents(priceCents: number, hitRate: number): number;
 export declare const SCORE_MIN = 1;
 export declare const SCORE_MAX = 10;
 /** The score-ring colour bands from the design brief. */
