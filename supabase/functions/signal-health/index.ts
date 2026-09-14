@@ -14,7 +14,7 @@
 
 import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
 import { logActivity, notifyAdmins } from '../_shared/log.ts';
-import { selectInBatches } from '../_shared/batch.ts';
+import { selectInBatchesPaged } from '../_shared/batch.ts';
 import { SIGNAL_KEYS, type SignalKey } from '../_shared/outcome-shared.mjs';
 
 interface Settings {
@@ -73,19 +73,24 @@ Deno.serve(handler(async (req) => {
   // Fetch the breakdowns for those trades' entry scores in one go.
   const marketIds = [...new Set(rows.map((r) => r.trades.market_id))];
   // Batched — see _shared/batch.ts. A long .in() list overflows the URL.
-  const scoreRows = await selectInBatches<{
+  // Paged within each batch: a market accumulates a score every five minutes
+  // for as long as it is in the fast tier, so a batch of held markets can be
+  // thousands of rows and PostgREST caps a response at 1,000 in silence.
+  const scoreRows = await selectInBatchesPaged<{
     market_id: string;
     model_version_id: string;
     breakdown: Record<SignalKey, number>;
     ts: string;
   }>(
     marketIds,
-    (batch) =>
+    (batch, from, to) =>
       db
         .from('scores')
         .select('market_id, model_version_id, breakdown, ts')
         .in('market_id', batch)
-        .order('ts', { ascending: true }),
+        .order('market_id', { ascending: true })
+        .order('ts', { ascending: true })
+        .range(from, to),
     { label: 'score load' },
   );
   scoreRows.sort((a, b) => a.ts.localeCompare(b.ts));

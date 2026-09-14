@@ -22,7 +22,7 @@ import {
   type Snapshot,
 } from '../_shared/signals.ts';
 import { logActivity } from '../_shared/log.ts';
-import { forEachBatch, selectInBatches, selectPaged } from '../_shared/batch.ts';
+import { forEachBatch, selectInBatches, selectInBatchesPaged, selectPaged } from '../_shared/batch.ts';
 import { DEFAULT_MAGNITUDE_STEP, recordTheses, type Thesis } from '../_shared/thesis.ts';
 import {
   activeWeights,
@@ -221,15 +221,20 @@ Deno.serve(handler(async (req) => {
 
   // Batched: 400 tickers in one .in() produced a ~12KB URL, which PostgREST
   // refused to send at all. See _shared/batch.ts.
-  const snaps = await selectInBatches<Snapshot & { market_id: string }>(
+  // Batched AND paged. Each market carries up to 72 snapshots in the fast
+  // window; a 100-market batch is ~7,200 rows and PostgREST silently returns
+  // the first 1,000. Ordered by market then ts so pages never overlap.
+  const snaps = await selectInBatchesPaged<Snapshot & { market_id: string }>(
     markets.map((m) => m.id),
-    (batch) =>
+    (batch, from, to) =>
       db
         .from('market_snapshots')
         .select('market_id, ts, price, volume, spread, open_interest, liquidity')
         .in('market_id', batch)
         .gte('ts', since)
-        .order('ts', { ascending: true }),
+        .order('market_id', { ascending: true })
+        .order('ts', { ascending: true })
+        .range(from, to),
     { label: 'snapshot load' },
   );
 

@@ -23,7 +23,7 @@ import {
   serviceClient,
 } from '../_shared/http.ts';
 import { logActivity } from '../_shared/log.ts';
-import { selectInBatches } from '../_shared/batch.ts';
+import { selectInBatchesPaged } from '../_shared/batch.ts';
 import {
   activeWeights,
   combineSignals,
@@ -132,17 +132,22 @@ Deno.serve(handler(async (req) => {
     }
 
     // ---- snapshot history for the whole universe -------------------------
-    const snaps = await selectInBatches<Snapshot & { market_id: string }>(
+    // Batched AND paged: a backtest window is days of 5-minute snapshots per
+    // market, far past PostgREST's silent 1,000-row cap per response. Every
+    // backtest before this fix ran on the oldest thousand rows of each batch.
+    const snaps = await selectInBatchesPaged<Snapshot & { market_id: string }>(
       universe.map((m) => m.id),
-      (batch) =>
+      (batch, from, to) =>
         db
           .from('market_snapshots')
           .select('market_id, ts, price, volume, spread, open_interest, liquidity')
           .in('market_id', batch)
           .gte('ts', body.rangeStart)
           .lte('ts', body.rangeEnd)
-          .order('ts', { ascending: true }),
-      { label: 'backtest snapshots' },
+          .order('market_id', { ascending: true })
+          .order('ts', { ascending: true })
+          .range(from, to),
+      { chunk: 10, label: 'backtest snapshots' },
     );
 
     const history = new Map<string, Snapshot[]>();

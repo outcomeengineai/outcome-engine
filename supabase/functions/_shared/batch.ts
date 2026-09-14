@@ -91,6 +91,47 @@ export async function selectPaged<T>(
 }
 
 /**
+ * Batched `.in()` AND paged: for reads where each id can match many rows.
+ *
+ * selectInBatches keeps the URL short, but each batch is still one PostgREST
+ * response, and PostgREST caps a response at 1,000 rows without saying so.
+ * The scorer loaded price history for 100 markets per batch -- up to 72
+ * snapshots each in a six-hour window, ~7,200 rows -- ordered by ts
+ * ascending, and got the OLDEST thousand back. Most markets received a stale
+ * partial history, many none, and drift was computed on the wrong end of the
+ * window. Reported as skippedNoData, growing in step with tier size.
+ *
+ * So: fewer ids per batch, and .range() pages within each batch until a
+ * short page. The callback must apply a deterministic ORDER BY.
+ */
+export async function selectInBatchesPaged<T>(
+  values: readonly string[],
+  run: (batch: string[], from: number, to: number) => PromiseLike<Result<T>>,
+  opts: { chunk?: number; label?: string } = {},
+): Promise<T[]> {
+  if (values.length === 0) return [];
+
+  const chunk = opts.chunk ?? 25;
+  const out: T[] = [];
+
+  for (let i = 0; i < values.length; i += chunk) {
+    const batch = values.slice(i, i + chunk) as string[];
+    for (let from = 0; ; from += PAGE) {
+      const to = from + PAGE - 1;
+      const { data, error } = await run(batch, from, to);
+      if (error) {
+        throw new Error(`${opts.label ?? 'batched paged select'} failed on ids ${i}-${i + chunk} rows ${from}-${to}: ${error.message}`);
+      }
+      if (!data || data.length === 0) break;
+      out.push(...data);
+      if (data.length < PAGE) break;
+    }
+  }
+
+  return out;
+}
+
+/**
  * Same batching for writes that filter by a long id list — deletes and
  * updates. Errors are returned rather than thrown, because most callers treat
  * a failed cleanup as a warning rather than a reason to abandon the run.

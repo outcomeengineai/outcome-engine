@@ -13,7 +13,7 @@
  */
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
-import { selectInBatches } from './batch.ts';
+import { selectInBatchesPaged } from './batch.ts';
 
 export type ThesisType =
   | 'anchor_gap'
@@ -96,15 +96,21 @@ export async function recordTheses(
 
   // Latest row per market for this version. DISTINCT ON is not available
   // through PostgREST, so order by recency and keep the first seen per market.
-  const rows = await selectInBatches<ExistingThesis>(
+  // Paged within each batch. Ordered by market then recency, so the first
+  // row seen per market is its latest; a capped response here would make
+  // markets absent from the page look new and be written again, and the
+  // dedupe would quietly stop deduping as history grew.
+  const rows = await selectInBatchesPaged<ExistingThesis>(
     theses.map((t) => t.marketId),
-    (batch) =>
+    (batch, from, to) =>
       db
         .from('edge_theses')
         .select('market_id, thesis_type, direction, magnitude, created_at')
         .eq('model_version_id', modelVersionId)
         .in('market_id', batch)
-        .order('created_at', { ascending: false }),
+        .order('market_id', { ascending: true })
+        .order('created_at', { ascending: false })
+        .range(from, to),
     { label: 'existing theses' },
   );
 
