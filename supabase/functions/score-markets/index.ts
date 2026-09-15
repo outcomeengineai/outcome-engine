@@ -363,7 +363,7 @@ Deno.serve(handler(async (req) => {
           sidePriceCents: price,
         }),
       };
-      return combineSignals(subs, usable);
+      return { ...combineSignals(subs, usable), subs };
     };
 
     const yes = evaluate('YES');
@@ -443,6 +443,11 @@ Deno.serve(handler(async (req) => {
         yesPrice: last.price,
         tier: market.cadence_tier,
         category: market.category,
+        // Raw per-signal sub-scores (0-10) for the WINNING side, before the
+        // blend. The breakdown above is weighted contributions, which cannot
+        // be un-blended without knowing the version's weights; the fitted
+        // weights generator needs the raw inputs the blend was made from.
+        subs: winner.subs,
         ...(anchors.has(market.id)
           ? {
               anchor_prob: Number(anchors.get(market.id)!.prob_yes),

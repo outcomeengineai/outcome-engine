@@ -226,10 +226,116 @@ var FONTS = {
   sans: "Inter",
   mono: "JetBrains Mono"
 };
+
+// src/fit.ts
+var FEATURE_NAMES = ["bias", "micro", "news", "base", "price"];
+function features(c) {
+  return [1, c.subs.micro / 10, c.subs.news / 10, c.subs.base / 10, (c.price - 50) / 50];
+}
+function sigmoid(z) {
+  return 1 / (1 + Math.exp(-z));
+}
+function fitLogistic(X, y, opts = {}) {
+  const l2 = opts.l2 ?? 0.01;
+  const iterations = opts.iterations ?? 800;
+  const lr = opts.learningRate ?? 0.3;
+  const n = X.length;
+  if (n === 0) return [];
+  const d = X[0].length;
+  const w = new Array(d).fill(0);
+  for (let it = 0; it < iterations; it++) {
+    const grad = new Array(d).fill(0);
+    for (let i = 0; i < n; i++) {
+      const xi = X[i];
+      let z = 0;
+      for (let j = 0; j < d; j++) z += w[j] * xi[j];
+      const err = sigmoid(z) - y[i];
+      for (let j = 0; j < d; j++) grad[j] += err * xi[j];
+    }
+    for (let j = 0; j < d; j++) {
+      const reg = j === 0 ? 0 : l2 * w[j];
+      w[j] = w[j] - lr * (grad[j] / n + reg);
+    }
+  }
+  return w;
+}
+function predictProb(w, x) {
+  let z = 0;
+  for (let j = 0; j < w.length; j++) z += w[j] * x[j];
+  return sigmoid(z);
+}
+function evaluatePolicy(rows, take) {
+  let taken = 0, hits = 0, total = 0;
+  rows.forEach((c, i) => {
+    if (!take(c, i)) return;
+    taken++;
+    if (c.hit) {
+      hits++;
+      total += netIfHitCents(c.price);
+    } else {
+      total += netIfMissCents(c.price);
+    }
+  });
+  return { taken, hits, netPerContractCents: taken ? total / taken : 0, totalNetCents: total };
+}
+function walkForward(calls, opts) {
+  const folds = Math.max(2, opts.folds ?? 5);
+  const margin = opts.margin ?? 0.02;
+  const sorted = [...calls].sort((a, b) => a.at.localeCompare(b.at));
+  const n = sorted.length;
+  const size = Math.floor(n / folds);
+  const oosRows = [];
+  const oosProb = [];
+  const oosBase = [];
+  let lastW = [];
+  for (let k = 1; k < folds; k++) {
+    const train = sorted.slice(0, k * size);
+    const test = k === folds - 1 ? sorted.slice(k * size) : sorted.slice(k * size, (k + 1) * size);
+    if (train.length === 0 || test.length === 0) continue;
+    const w = fitLogistic(train.map(features), train.map((c) => c.hit ? 1 : 0), opts);
+    lastW = w;
+    const base = train.filter((c) => c.hit).length / train.length;
+    for (const c of test) {
+      oosRows.push(c);
+      oosProb.push(predictProb(w, features(c)));
+      oosBase.push(base);
+    }
+  }
+  const brier = (p) => oosRows.length ? p.reduce((s, pi, i) => s + (pi - (oosRows[i].hit ? 1 : 0)) ** 2, 0) / oosRows.length : NaN;
+  const coefficients = Object.fromEntries(
+    FEATURE_NAMES.map((name, j) => [name, Number((lastW[j] ?? 0).toFixed(4))])
+  );
+  return {
+    rows: n,
+    folds,
+    holdout: oosRows.length,
+    fittedBrier: Number(brier(oosProb).toFixed(4)),
+    baseRateBrier: Number(brier(oosBase).toFixed(4)),
+    coefficients,
+    fittedPolicy: evaluatePolicy(oosRows, (c, i) => oosProb[i] >= breakevenHitRate(c.price) + margin),
+    livePolicy: evaluatePolicy(oosRows, (c) => c.score >= opts.liveSurface),
+    takeAll: evaluatePolicy(oosRows, () => true)
+  };
+}
+function impliedBlendWeights(coefficients) {
+  const raw = {
+    micro: Math.max(0, coefficients.micro),
+    news: Math.max(0, coefficients.news),
+    base: Math.max(0, coefficients.base)
+  };
+  const total = raw.micro + raw.news + raw.base;
+  if (total <= 0) return null;
+  return {
+    micro: Number((raw.micro / total).toFixed(3)),
+    news: Number((raw.news / total).toFixed(3)),
+    base: Number((raw.base / total).toFixed(3))
+  };
+}
 export {
   BAND_COLORS,
   COLORS,
   DEFAULT_FEE_RATE,
+  FEATURE_NAMES,
   FONTS,
   GRADIENT_CSS,
   GRADIENT_STOPS,
@@ -248,11 +354,14 @@ export {
   clampScore,
   combineSignals,
   expectedNetCents,
+  features,
   feeOnNetPnlCents,
+  fitLogistic,
   formatPriceCents,
   formatScore,
   formatUsd,
   hasOverride,
+  impliedBlendWeights,
   isStrongPick,
   kalshiFeeCents,
   netIfHitCents,
@@ -260,6 +369,7 @@ export {
   payoutCents,
   periodTotals,
   pickSide,
+  predictProb,
   profitIfWinCents,
   quoteStake,
   realizedPnlCents,
@@ -272,5 +382,6 @@ export {
   stakeCents,
   surfaces,
   unrealizedPnlCents,
+  walkForward,
   weightsForCategory
 };

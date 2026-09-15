@@ -2140,6 +2140,24 @@ end;
 $fn$;
 
 
+-- ===== 20260823003700_fit_weights_cron.sql =========================
+
+-- ===========================================================================
+-- Fitted-weights proposal, weekly.
+--
+-- Tuesdays 14:00 UTC, the day after the model review digest, so the two
+-- arrive as a pair: Monday says how the live model is doing net of fees;
+-- Tuesday, if the evidence supports it, puts a fitted alternative on the
+-- table as a DRAFT with its out-of-sample comparison in the notes. Neither
+-- publishes anything. Below the sample floor the job reports "insufficient"
+-- and does nothing else.
+-- ===========================================================================
+select cron.schedule(
+  'oe-fit-weights', '0 14 * * 2',
+  $cron$ select public.invoke_edge_function('fit-weights', '{"tier":"fast"}'::jsonb); $cron$
+);
+
+
 -- ===== record these migrations as applied =========================
 create schema if not exists supabase_migrations;
 
@@ -2172,7 +2190,8 @@ values
   ('20260823003300'),
   ('20260823003400'),
   ('20260823003500'),
-  ('20260823003600')
+  ('20260823003600'),
+  ('20260823003700')
 on conflict (version) do nothing;
 
 commit;
