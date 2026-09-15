@@ -108,15 +108,49 @@ export function microFeatures(history: Snapshot[]): MicroFeatures {
  * Quality is a multiplier rather than an addend: a market nobody can actually
  * trade at a sane price should not score well no matter how it is drifting.
  */
-export function microScore(f: MicroFeatures, side: Side): number {
+/**
+ * How the momentum and activity components saturate. A section 7 tunable on
+ * the model version (thresholds.micro), because it changes what a score
+ * MEANS: versions before v1.3 clip hard and must keep doing so, or their
+ * backtests would no longer reproduce what members saw.
+ *
+ *   hard  momentum clips at 8c of drift, activity at 3x volume. Every liquid
+ *         market moving anywhere from 8c to 30c lands in the same 0.56-point
+ *         window at the top of the scale -- the wall of identical 9.6s on the
+ *         desk, all wearing the strong badge, hitting 47%. The scale was
+ *         clipping, not measuring.
+ *   soft  tanh momentum and 1 - exp activity: monotonic, never pinned, 8c and
+ *         25c score differently. Same inputs spread across ~3 points.
+ */
+export interface MicroOptions {
+  saturation?: 'hard' | 'soft';
+  /** Soft mode: drift (cents) at which momentum reaches ~0.88 of its range. */
+  momentumScaleCents?: number;
+  /** Soft mode: volume ratio above baseline at which activity reaches ~0.63. */
+  activityScale?: number;
+}
+
+export const HARD_SATURATION: Required<MicroOptions> = { saturation: 'hard', momentumScaleCents: 16, activityScale: 2.5 };
+
+export function microScore(f: MicroFeatures, side: Side, opts: MicroOptions = {}): number {
   if (f.samples < 2) return 3; // not enough history to say anything; stay neutral-low
 
   const signedDrift = side === 'YES' ? f.drift : -f.drift;
-  // 8 cents of drift over the window is a strong move on a 0-100 scale.
-  const momentum = clamp01(0.5 + signedDrift / 16);
+  const soft = opts.saturation === 'soft';
 
-  // 3x normal volume saturates.
-  const activity = clamp01((f.volumeRatio - 0.5) / 2.5);
+  let momentum: number;
+  let activity: number;
+  if (soft) {
+    const ms = opts.momentumScaleCents ?? 10;
+    const as = opts.activityScale ?? 3;
+    momentum = 0.5 + 0.5 * Math.tanh(signedDrift / ms);
+    activity = clamp01(1 - Math.exp(-Math.max(0, f.volumeRatio - 0.5) / as));
+  } else {
+    // 8 cents of drift over the window is a strong move on a 0-100 scale.
+    momentum = clamp01(0.5 + signedDrift / 16);
+    // 3x normal volume saturates.
+    activity = clamp01((f.volumeRatio - 0.5) / 2.5);
+  }
 
   // A 1c spread is excellent, 8c+ is unusable.
   const spreadQuality = clamp01((8 - f.spread) / 7);

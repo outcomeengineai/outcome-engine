@@ -12,15 +12,7 @@
 
 import { handler, json, readJson, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
 import { newsSignalsFor, NEUTRAL_NEWS, type NewsSignal } from '../_shared/news.ts';
-import {
-  autoTags,
-  baseRateScore,
-  microFeatures,
-  microScore,
-  newsScore,
-  sidePrice,
-  type Snapshot,
-} from '../_shared/signals.ts';
+import { autoTags, baseRateScore, microFeatures, microScore, newsScore, sidePrice, type Snapshot, type MicroOptions } from '../_shared/signals.ts';
 import { logActivity } from '../_shared/log.ts';
 import { forEachBatch, selectInBatches, selectInBatchesPaged, selectPaged } from '../_shared/batch.ts';
 import { DEFAULT_MAGNITUDE_STEP, recordTheses, type Thesis } from '../_shared/thesis.ts';
@@ -363,7 +355,7 @@ Deno.serve(handler(async (req) => {
       const price = sidePrice(last.price, side);
       const stats = baseRates.get(`${market.category}|${side}`);
       const subs: ScoreBreakdown = {
-        micro: microScore(micro, side),
+        micro: microScore(micro, side, (thresholds as { micro?: MicroOptions }).micro ?? {}),
         news: newsScore(news, side),
         base: baseRateScore({
           sampleCount: stats?.sampleCount ?? 0,

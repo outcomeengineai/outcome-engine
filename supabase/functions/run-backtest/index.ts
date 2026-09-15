@@ -35,14 +35,7 @@ import {
   type Thresholds,
   type WeightConfig,
 } from '../_shared/outcome-shared.mjs';
-import {
-  baseRateScore,
-  microFeatures,
-  microScore,
-  newsScore,
-  sidePrice,
-  type Snapshot,
-} from '../_shared/signals.ts';
+import { baseRateScore, microFeatures, microScore, newsScore, sidePrice, type Snapshot, type MicroOptions } from '../_shared/signals.ts';
 
 /** Every simulated position is the same size, so results compare like for like. */
 const SIM_CONTRACTS = 50;
@@ -219,7 +212,7 @@ Deno.serve(handler(async (req) => {
         const evaluate = (side: 'YES' | 'NO') => {
           const price = sidePrice(entrySnap.price, side);
           const subs: ScoreBreakdown = {
-            micro: microScore(micro, side),
+            micro: microScore(micro, side, (thresholds as { micro?: MicroOptions }).micro ?? {}),
             news: newsScore(news, side),
             // No historical base rate is replayed: reconstructing what the
             // track record looked like at each past moment is a bigger job
