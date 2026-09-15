@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { COLORS } from '@outcome/shared';
 import { Banner, Button, Hint, s } from '@/components/ui';
-import { callFunction, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
 
 /**
@@ -16,29 +16,21 @@ import { useSession } from '@/lib/session';
  */
 export default function AuthScreen() {
   const router = useRouter();
-  const { code, email: prefilled } = useLocalSearchParams<{ code: string; email: string }>();
-  const { session, refresh } = useSession();
+  const { email: prefilled } = useLocalSearchParams<{ email: string }>();
+  const { session } = useSession();
 
   const [email, setEmail] = useState(prefilled ?? '');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The deep-link handler in _layout establishes the session; this reacts to
-  // it appearing and finishes the redemption.
+  // Invites are redeemed server-side when the account is created (see
+  // redeem-invite and the auth trigger), so there is nothing to finish here.
+  // This screen is for people who already have an account. The deep-link
+  // handler in _layout establishes the session; this reacts to it appearing.
   useEffect(() => {
-    if (!session || !code) return;
-
-    (async () => {
-      try {
-        await callFunction('redeem-invite', { code, redeem: true });
-        await refresh();
-        router.replace('/(onboarding)/explainer');
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not redeem that invite.');
-      }
-    })();
-  }, [session, code, refresh, router]);
+    if (session) router.replace('/(onboarding)/explainer');
+  }, [session, router]);
 
   async function sendLink() {
     setBusy(true);
@@ -46,7 +38,9 @@ export default function AuthScreen() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
-        options: { emailRedirectTo: Linking.createURL('/auth-callback') },
+        // shouldCreateUser: false -- the app never creates accounts. Public
+        // signups are off on the project as well; this is belt and braces.
+        options: { emailRedirectTo: Linking.createURL('/auth-callback'), shouldCreateUser: false },
       });
       if (error) throw error;
       setSent(true);
