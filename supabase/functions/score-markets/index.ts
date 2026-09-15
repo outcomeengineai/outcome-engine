@@ -238,6 +238,19 @@ Deno.serve(handler(async (req) => {
   for (const r of prevRows) previous.set(r.market_id, r);
   let unchangedSkipped = 0;
 
+  // The current anchor for each candidate, if one exists. Stamped into the
+  // thesis so the resolution label carries the anchor's claim at scoring
+  // time -- anchor_calibration grades that claim against the outcome and
+  // against the market's own price. Read-only here: anchors do not move a
+  // score until that table says they should.
+  const anchors = new Map<string, { prob_yes: number; forecast_f: number; sigma_f: number; source: string }>();
+  const anchorRows = await selectInBatches<{ market_id: string; prob_yes: number; forecast_f: number; sigma_f: number; source: string }>(
+    ids,
+    (batch) => db.from('market_anchors').select('market_id, prob_yes, forecast_f, sigma_f, source').in('market_id', batch),
+    { label: 'anchors' },
+  );
+  for (const a of anchorRows) anchors.set(a.market_id, a);
+
   if (markets.length === 0) {
     return json({ ok: true, scored: 0, reason: 'no open markets among candidates' });
   }
@@ -438,6 +451,14 @@ Deno.serve(handler(async (req) => {
         yesPrice: last.price,
         tier: market.cadence_tier,
         category: market.category,
+        ...(anchors.has(market.id)
+          ? {
+              anchor_prob: Number(anchors.get(market.id)!.prob_yes),
+              anchor_forecast_f: Number(anchors.get(market.id)!.forecast_f),
+              anchor_sigma_f: Number(anchors.get(market.id)!.sigma_f),
+              anchor_source: anchors.get(market.id)!.source,
+            }
+          : {}),
       },
     });
 
