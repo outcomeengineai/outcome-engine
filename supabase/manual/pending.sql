@@ -1993,6 +1993,15 @@ select cron.schedule(
 );
 
 
+-- ===== 20260823003300_anchor_station_sfo.sql =======================
+
+-- The first live anchor run reported one unknown station. Kalshi's San
+-- Francisco temperature markets resolve at CLISFO.
+insert into public.anchor_stations (code, name, lat, lon) values
+  ('CLISFO', 'San Francisco (SFO)', 37.6213, -122.3790)
+on conflict (code) do nothing;
+
+
 -- ===== record these migrations as applied =========================
 create schema if not exists supabase_migrations;
 
@@ -2021,7 +2030,8 @@ values
   ('20260823002900'),
   ('20260823003000'),
   ('20260823003100'),
-  ('20260823003200')
+  ('20260823003200'),
+  ('20260823003300')
 on conflict (version) do nothing;
 
 commit;

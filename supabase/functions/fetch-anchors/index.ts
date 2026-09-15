@@ -97,6 +97,36 @@ function durationMs(iso: string): number {
 }
 
 /**
+ * The instant a local wall-clock time falls on, in an IANA zone. Two-pass:
+ * guess the offset from the zone at midnight UTC, then correct using the
+ * offset actually in force at the guessed instant (handles DST edges).
+ */
+function localToUtcMs(dateYmd: string, hour: number, timezone: string | null): number {
+  const tz = timezone ?? 'UTC';
+  const offsetAt = (ms: number) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(new Date(ms));
+    const get = (t: string) => Number(parts.find((x) => x.type === t)?.value ?? 0);
+    const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+    return asUtc - ms; // zone offset in ms at that instant
+  };
+  const naive = Date.parse(`${dateYmd}T${String(hour).padStart(2, '0')}:00:00Z`);
+  const guess = naive - offsetAt(naive);
+  return naive - offsetAt(guess);
+}
+
+/**
+ * When the day's value is DETERMINED, not when the market expires. A daily
+ * high is set mid-afternoon; a low pre-dawn. Lead time runs to that moment.
+ * Past it, the forecast is stale and the observation is the truth -- the
+ * first live run anchored same-day highs at 11-34% against markets at 100c
+ * that already knew the afternoon's number.
+ */
+const PEAK_LOCAL_HOUR = { high: 15, low: 5 } as const;
+
+/**
  * Which local calendar day an NWS max/min period belongs to: its MIDPOINT.
  * A daytime max runs ~8am-9pm local, midpoint midday -- that day. An
  * overnight min runs ~8pm-10am, midpoint ~3am -- the NEXT day, which is the
@@ -193,9 +223,10 @@ Deno.serve(handler(async (req) => {
   }
 
   // ---- per market -----------------------------------------------------------
-  let anchored = 0, skippedNoStation = 0, skippedNoForecast = 0, skippedLead = 0;
+  let anchored = 0, skippedNoStation = 0, skippedNoForecast = 0, skippedLead = 0, skippedObserved = 0;
   const upserts: Record<string, unknown>[] = [];
   const history: Record<string, unknown>[] = [];
+  const withdrawals: string[] = [];
 
   for (const ticker of tickers) {
     const m = byTicker.get(ticker);
@@ -216,8 +247,15 @@ Deno.serve(handler(async (req) => {
     const forecastF = (kind === 'high' ? grid.max : grid.min).get(targetDate);
     if (forecastF === undefined) { skippedNoForecast++; continue; }
 
-    const expiry = (m.expected_expiration_time as string | undefined) ?? m.close_time;
-    const leadHours = expiry ? (new Date(expiry).getTime() - now) / 3600_000 : 0;
+    const peakMs = localToUtcMs(targetDate, PEAK_LOCAL_HOUR[kind], station.timezone);
+    const leadHours = (peakMs - now) / 3600_000;
+    if (leadHours < -1) {
+      // The value is being, or has been, observed. Withdraw any anchor so
+      // the scorer stops stamping a stale claim into theses.
+      withdrawals.push(ticker);
+      skippedObserved++;
+      continue;
+    }
     const leadDay = Math.max(0, Math.floor(leadHours / 24));
     if (leadDay > settings.maxLeadDays) { skippedLead++; continue; }
     const sigma = settings.temperatureSigmaF[Math.min(leadDay, settings.temperatureSigmaF.length - 1)];
@@ -259,6 +297,10 @@ Deno.serve(handler(async (req) => {
     const { error } = await db.from('anchor_history').insert(history.slice(i, i + 500));
     if (error) console.warn('anchor history insert failed:', error.message);
   }
+  for (let i = 0; i < withdrawals.length; i += 200) {
+    const { error } = await db.from('market_anchors').delete().in('market_id', withdrawals.slice(i, i + 200));
+    if (error) console.warn('anchor withdrawal failed:', error.message);
+  }
 
   const result = {
     ok: true,
@@ -268,6 +310,8 @@ Deno.serve(handler(async (req) => {
     skippedNoStation,
     skippedNoForecast,
     skippedLead,
+    skippedObserved,
+    withdrawn: withdrawals.length,
     unknownStations: [...unknownStations],
     ms: Date.now() - started,
   };
