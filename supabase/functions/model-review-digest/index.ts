@@ -17,6 +17,7 @@ import { logActivity, notifyAdmins } from '../_shared/log.ts';
 interface Rec {
   tier: string;
   labelled: number;
+  priced: number;
   edge_bands: number[];
   suggested_surface: number | null;
   suggested_strong: number | null;
@@ -29,6 +30,8 @@ interface Bucket {
   n: number;
   hit_rate: number;
   ci_low: number;
+  priced_n: number;
+  priced_hit_rate: number | null;
   breakeven_rate: number | null;
   avg_net_cents: number | null;
 }
@@ -66,7 +69,13 @@ Deno.serve(handler(async (req) => {
     for (const b of tierRows) {
       const be = b.breakeven_rate === null ? '—' : `${(Number(b.breakeven_rate) * 100).toFixed(0)}%`;
       const net = b.avg_net_cents === null ? '—' : `${Number(b.avg_net_cents) >= 0 ? '+' : ''}${Number(b.avg_net_cents).toFixed(1)}¢`;
-      lines.push(`  ${b.band}.x  n=${b.n}  hit ${(Number(b.hit_rate) * 100).toFixed(0)}% (floor ${(Number(b.ci_low) * 100).toFixed(0)}%)  breakeven ${be}  net ${net}`);
+      // Net and the hit rate beside it describe the SAME rows: the priced
+      // subset. The full-sample hit rate is reported separately so a small
+      // priced sample cannot masquerade as the band's verdict.
+      const priced = Number(b.priced_n) === 0
+        ? 'no entry prices yet'
+        : `priced n=${b.priced_n} hit ${(Number(b.priced_hit_rate) * 100).toFixed(0)}% breakeven ${be} net ${net}`;
+      lines.push(`  ${b.band}.x  n=${b.n}  hit ${(Number(b.hit_rate) * 100).toFixed(0)}% (floor ${(Number(b.ci_low) * 100).toFixed(0)}%)  |  ${priced}`);
     }
     if (r.suggested_surface !== null && thresholds.surface !== undefined &&
         Number(r.suggested_surface) !== Number(thresholds.surface)) {

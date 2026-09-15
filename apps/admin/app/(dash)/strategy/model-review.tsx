@@ -22,15 +22,17 @@ interface Bucket {
   hit_rate: number;
   ci_low: number;
   ci_high: number;
+  priced_n: number;
+  priced_hit_rate: number | null;
   avg_price: number | null;
   breakeven_rate: number | null;
   avg_net_cents: number | null;
-  priced_n: number;
 }
 
 interface Rec {
   tier: string;
   labelled: number;
+  priced: number;
   edge_bands: number[];
   suggested_surface: number | null;
   suggested_strong: number | null;
@@ -84,7 +86,7 @@ export async function ModelReview() {
               <div key={r.tier} className="card" style={{ margin: 0 }}>
                 <div className="row" style={{ gap: 8 }}>
                   <Pill tone="muted">{r.tier}</Pill>
-                  <span className="hint">{Number(r.labelled).toLocaleString()} labels</span>
+                  <span className="hint">{Number(r.labelled).toLocaleString()} labels · {Number(r.priced).toLocaleString()} priced</span>
                 </div>
                 <div style={{ marginTop: 8, fontSize: 13.5 }}>{r.verdict}</div>
                 {r.suggested_surface !== null ? (
@@ -108,6 +110,8 @@ export async function ModelReview() {
                       <th>Labels</th>
                       <th>Hit rate</th>
                       <th>95% interval</th>
+                      <th>Priced</th>
+                      <th>Hit (priced)</th>
                       <th>Avg entry</th>
                       <th>Breakeven</th>
                       <th>Net / contract</th>
@@ -125,6 +129,8 @@ export async function ModelReview() {
                           <td className="num">{Number(r.n)}</td>
                           <td className="num">{pct(r.hit_rate)}</td>
                           <td className="num hint">{pct(r.ci_low)} – {pct(r.ci_high)}</td>
+                          <td className="num">{Number(r.priced_n)}</td>
+                          <td className="num">{pct(r.priced_hit_rate)}</td>
                           <td className="num">{r.avg_price === null ? '—' : `${Number(r.avg_price).toFixed(0)}¢`}</td>
                           <td className="num">{pct(r.breakeven_rate)}</td>
                           <td className="num">{cents(r.avg_net_cents)}</td>
@@ -145,8 +151,9 @@ export async function ModelReview() {
 
           <div className="hint" style={{ marginTop: 12 }}>
             Entry price is what the model&apos;s side cost at scoring time. Net per contract is the average
-            realised outcome after the 7% × p × (1−p) trading fee. Rows without a recorded entry price
-            (labels from before the scorer stored it) count toward hit rate but not toward net.
+            realised outcome after the 7% × p × (1−p) trading fee, over the <em>priced</em> rows only —
+            read it beside &ldquo;Hit (priced)&rdquo;, which is the same rows. Labels from before the scorer
+            stored entry prices count toward the full-sample hit rate but not toward net.
           </div>
         </>
       )}
