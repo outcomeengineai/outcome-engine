@@ -64,19 +64,20 @@ export function useDesk(userId: string | undefined) {
     async () => {
       if (!userId) return { markets: [], strongThreshold: 7, versionLabel: '—' };
 
-      const { data: versionId } = await supabase.rpc('effective_version_for', { p_user: userId });
-      if (!versionId) return { markets: [], strongThreshold: 7, versionLabel: '—' };
-
-      const [{ data: rows, error }, { data: version }, { data: tags }] = await Promise.all([
+      // One round-trip: my_decision_desk resolves this member's effective
+      // version in SQL and carries version_label + thresholds on every row.
+      // Previously: effective_version_for, then decision_desk, then
+      // model_versions -- three sequential hops on a phone connection.
+      const [{ data: rows, error }, { data: tags }] = await Promise.all([
         supabase
-          .from('decision_desk')
+          .from('my_decision_desk')
           .select('*')
-          .eq('model_version_id', versionId)
           .order('score', { ascending: false })
           .limit(50),
-        supabase.from('model_versions').select('version_label, thresholds').eq('id', versionId).maybeSingle(),
         supabase.from('tags').select('market_id, text, severity').not('market_id', 'is', null).limit(300),
       ]);
+      const first = (rows ?? [])[0] as { version_label?: string; thresholds?: Record<string, unknown> } | undefined;
+      const version = first ? { version_label: first.version_label, thresholds: first.thresholds } : null;
 
       if (error) throw error;
 
@@ -112,14 +113,11 @@ export function useMarket(marketId: string | undefined, userId: string | undefin
     async () => {
       if (!marketId || !userId) return null;
 
-      const { data: versionId } = await supabase.rpc('effective_version_for', { p_user: userId });
-
       const [{ data: row }, { data: tags }] = await Promise.all([
         supabase
-          .from('decision_desk')
+          .from('my_decision_desk')
           .select('*')
           .eq('market_id', marketId)
-          .eq('model_version_id', versionId)
           .maybeSingle(),
         supabase.from('tags').select('text, severity').eq('market_id', marketId),
       ]);

@@ -325,3 +325,31 @@ its size limit -- run once, in the SQL editor:
 If the project is already in read-only mode, prefix the session with
 `set default_transaction_read_only = off;` before pruning and vacuuming.
 Migrations cannot apply while the project is read-only, so this comes first.
+
+### Running the member app
+
+The app bundles for Android/iOS (Expo Go or an EAS build) and for the web
+(`react-native-web`, used for click-through testing in a browser).
+
+    npm run dev:member          # Metro; scan the QR with Expo Go on a phone
+    npm run dev:member:web      # http://localhost:8081 in a browser
+
+Phone and computer must share a network for the QR to work; otherwise
+`npx expo start --tunnel` from apps/member.
+
+**One-time Supabase dashboard setup for sign-in** (Authentication):
+
+- URL Configuration -> Redirect URLs: add `outcomeengine://auth-callback`
+  (the built app) and `exp://**` (Expo Go during development). Magic links
+  land on a deep link, not a web page; without these the link is refused.
+- Sign In / Providers -> Email: turn **Allow new users to sign up** OFF.
+  Accounts are created only by redeem-invite (auth.admin.inviteUserByEmail)
+  from a valid invite; the app never creates one. This is what makes
+  "invite only" true at the server, not just in the UI.
+- SMTP Settings: custom SMTP (Resend/Postmark) before inviting more than a
+  handful of people; the built-in sender allows a few emails an hour.
+
+**Inviting someone:** Admin dashboard -> Accounts -> create an invite
+(optionally addressed to an email). They enter the code in the app, then
+their email; the platform creates the account and emails the sign-in link.
+Payment and Kalshi connection are skippable -- paper mode needs neither.

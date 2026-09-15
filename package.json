@@ -16,7 +16,8 @@
     "fn:serve": "supabase functions serve --no-verify-jwt",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "bundle:shared": "npm run bundle -w @outcome/shared",
-    "build:manual-sql": "node scripts/build-manual-sql.mjs"
+    "build:manual-sql": "node scripts/build-manual-sql.mjs",
+    "dev:member:web": "npm run web -w @outcome/member"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
