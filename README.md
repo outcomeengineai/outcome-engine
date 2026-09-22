@@ -140,13 +140,18 @@ not hold. Those markets are counted as `noDirection` in the scoring response
 rather than surfaced.
 
 
-**The news signal is on hold, not merely neutral.** Measured against GDELT:
-one request permitted every five seconds, ~12 seconds per response. The
-per-market article search the signal was designed around cannot run at 800
-markets per 5-minute pass, so `signal_health.news.hold_reason` is set, the
-scorer does not fetch, and v1.2 carries a news weight of zero. Lifting the
-hold is a manual act, once a viable source exists -- the health job never
-re-enables a held signal on its own.
+**The news signal runs in shadow.** It was held from 2026-09-11 (GDELT: one
+request per five seconds, ~12 s each; per-market search cannot run at 800
+markets per 5-minute pass) until 2026-09-22, when the source became a feed
+reader: `fetch-news` polls the outlet feeds in `news_feeds` every five
+minutes into `news_items`, matches the last three days of items against every
+priced market by SUBJECT (the proper nouns in the question; a game needs both
+teams), and writes `news_cache`. The scorer only reads that cache and never
+calls a provider. v1.2 still carries a news weight of zero, so no score
+moves; what changes is that every thesis now records a real news sub-score,
+and `fit-weights` grades it against outcomes like the other levers. News gets
+a weight when the fit says it earned one, through a published version. Feed
+health is in `news_feeds.last_status`; a dead feed is skipped, never fatal.
 This is why the first fifteen live scores were all YES: with drift at zero the
 sides tied exactly and the tie-break went one way every time. Fixed in
 20260823001000, but the underlying limitation is structural, not a bug.

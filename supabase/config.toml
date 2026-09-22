@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.kalshi-balance]
 verify_jwt = true
+
+[functions.fetch-news]
+verify_jwt = true

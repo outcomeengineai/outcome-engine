@@ -2,9 +2,11 @@
  * News signal input.
  *
  * Fetched per MARKET and cached, never per user — twenty members looking at
- * the same market must not become twenty news API calls. GDELT is the default
- * because it needs no key and has no hard quota; NewsAPI is supported for a
- * cleaner corpus when a key is available.
+ * the same market must not become twenty news API calls. The default
+ * provider is 'rss': the fetch-news function polls outlet feeds every five
+ * minutes and writes the cache, and the scoring pass only reads it. GDELT
+ * and NewsAPI remain as per-market search providers (NEWS_PROVIDER) for the
+ * record; neither runs at scoring pace.
  *
  * What this produces is deliberately crude: a volume figure and a sentiment
  * lean in [-1, 1]. It is a directional confirmation signal, not a language
@@ -263,7 +265,16 @@ export async function newsSignalsFor(
   const cached = signals.size;
 
   // ---- 2. budgeted upstream fetches --------------------------------------
-  const provider = optional('NEWS_PROVIDER', 'gdelt').toLowerCase();
+  const provider = optional('NEWS_PROVIDER', 'rss').toLowerCase();
+  if (provider === 'rss') {
+    // The feed reader (fetch-news, every five minutes) writes news_cache for
+    // every market in a priced tier; this pass only reads it. A market with
+    // no fresh row scores neutral this pass and picks up the signal on the
+    // next one. Upstream calls from inside scoring are what the GDELT era
+    // taught us never to do again.
+    for (const m of markets) if (!signals.has(m.id)) signals.set(m.id, NEUTRAL);
+    return { signals, fetched: 0, cached, aborted: false };
+  }
   if (provider === 'none') {
     for (const m of markets) if (!signals.has(m.id)) signals.set(m.id, NEUTRAL);
     return { signals, fetched: 0, cached, aborted: false };
