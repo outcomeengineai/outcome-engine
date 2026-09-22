@@ -259,8 +259,74 @@ Deno.serve(handler(async (req) => {
     });
   }
 
+  // ---- platform health: the cron log and storage ---------------------------
+  // pg_cron records every run. Nobody read that log for a week while the
+  // prune job failed on every run and the database tripled. Two failures in
+  // a row is the bar (one "job startup timeout" is weather); one
+  // notification per finding per day is the budget, so a persistent fault
+  // is a daily reminder and not a flood.
+  const ops: string[] = [];
+  try {
+    const [{ data: cronRows }, { data: storageRow }] = await Promise.all([
+      db.rpc('cron_health'),
+      db.rpc('storage_health'),
+    ]);
+    const failing = ((cronRows ?? []) as Array<{
+      jobname: string;
+      consecutive_failures: number;
+      last_message: string | null;
+    }>).filter((j) => j.consecutive_failures >= 2);
+    const st = (storageRow ?? {}) as { db_size_mb?: number; alert_mb?: number };
+    const storageHigh = Number(st.db_size_mb ?? 0) > Number(st.alert_mb ?? Number.POSITIVE_INFINITY);
+
+    const dayAgo = new Date(now.getTime() - 24 * 3600_000).toISOString();
+    const { data: recent } = await db
+      .from('activity_log')
+      .select('event_type, metadata')
+      .in('event_type', ['ops.cron_failing', 'ops.storage_high'])
+      .gte('ts', dayAgo);
+    const alreadyToday = new Set(
+      ((recent ?? []) as Array<{ event_type: string; metadata: { job?: string } | null }>).map(
+        (r) => `${r.event_type}|${r.metadata?.job ?? ''}`,
+      ),
+    );
+
+    for (const j of failing) {
+      if (alreadyToday.has(`ops.cron_failing|${j.jobname}`)) continue;
+      const detail = `${j.jobname} has failed ${j.consecutive_failures} runs in a row: ${j.last_message ?? 'no message'}`;
+      await notifyAdmins(db, {
+        type: 'ops.cron_failing',
+        title: `Cron job failing: ${j.jobname}`,
+        body: `${detail}. See the Health tab.`,
+        payload: { job: j.jobname, consecutive: j.consecutive_failures },
+      });
+      await logActivity(db, {
+        type: 'ops.cron_failing',
+        detail,
+        metadata: { job: j.jobname, consecutive: j.consecutive_failures },
+      });
+      ops.push(j.jobname);
+    }
+
+    if (storageHigh && !alreadyToday.has('ops.storage_high|')) {
+      const detail = `Database is ${st.db_size_mb} MB, above the ${st.alert_mb} MB alert line.`;
+      await notifyAdmins(db, {
+        type: 'ops.storage_high',
+        title: 'Database size above the alert line',
+        body: `${detail} See the Health tab.`,
+        payload: { db_size_mb: st.db_size_mb, alert_mb: st.alert_mb },
+      });
+      await logActivity(db, { type: 'ops.storage_high', detail, metadata: { db_size_mb: st.db_size_mb } });
+      ops.push('storage');
+    }
+  } catch (err) {
+    // The health read must never take the signal evaluation down with it.
+    console.error('platform health check failed:', err instanceof Error ? err.message : String(err));
+  }
+
   return json({
     ok: true,
+    ops,
     windowSize: cfg.windowSize,
     evaluated: rows.length,
     attribution: tally,
