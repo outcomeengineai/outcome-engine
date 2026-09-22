@@ -607,6 +607,33 @@ function matchesTerms(tokens, t) {
   for (const w of t.all) if (tokens.has(w)) hits++;
   return hits >= 2;
 }
+
+// src/anchors.ts
+function normalCdf(x) {
+  const z = x / Math.SQRT2;
+  const az = Math.abs(z);
+  const t = 1 / (1 + 0.3275911 * az);
+  const poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+  const erf = 1 - poly * Math.exp(-az * az);
+  return 0.5 * (1 + (z >= 0 ? erf : -erf));
+}
+function temperatureBandProbability(strikeType, floor, cap, forecastF, sigma) {
+  if (!Number.isFinite(forecastF) || !(sigma > 0)) return null;
+  const below = (x) => normalCdf((x - forecastF) / sigma);
+  switch (strikeType) {
+    // T < cap  <=>  T <= cap-1  <=>  continuous T < cap-0.5
+    case "less":
+      return cap === null ? null : below(cap - 0.5);
+    // T > floor  <=>  T >= floor+1  <=>  continuous T > floor+0.5
+    case "greater":
+      return floor === null ? null : 1 - below(floor + 0.5);
+    // floor <= T <= cap  <=>  continuous floor-0.5 < T < cap+0.5
+    case "between":
+      return floor === null || cap === null ? null : below(cap + 0.5) - below(floor - 0.5);
+    default:
+      return null;
+  }
+}
 export {
   BAND_COLORS,
   COLORS,
@@ -646,6 +673,7 @@ export {
   matchesTerms,
   netIfHitCents,
   netIfMissCents,
+  normalCdf,
   parseFeed,
   payoutCents,
   periodTotals,
@@ -662,6 +690,7 @@ export {
   sidePriceCents,
   stakeCents,
   surfaces,
+  temperatureBandProbability,
   tokenSet,
   tokenize,
   unrealizedPnlCents,

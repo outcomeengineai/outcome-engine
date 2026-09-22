@@ -18,6 +18,7 @@ import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/htt
 import { getMarketsByTickers, type KalshiMarket } from '../_shared/kalshi.ts';
 import { logActivity } from '../_shared/log.ts';
 import { selectPaged } from '../_shared/batch.ts';
+import { temperatureBandProbability } from '../_shared/outcome-shared.mjs';
 
 const NWS_HEADERS = {
   'User-Agent': 'outcome-engine (admin@outcomeengine.ai)',
@@ -48,39 +49,11 @@ interface AnchorSettings {
 
 const DEFAULTS: AnchorSettings = { enabled: true, temperatureSigmaF: [2.2, 2.8, 3.5, 4.2, 5.0], maxLeadDays: 5 };
 
-/**
- * Standard normal CDF via erf (Abramowitz & Stegun 7.1.26, |error| < 1.5e-7).
- * Checked: phi(0) = 0.5, phi(1.96) = 0.975.
+/*
+ * Band probability lives in packages/shared/src/anchors.ts, where it is
+ * unit-tested against Kalshi's verified strike convention. The first
+ * version here was off by one degree on every "X or above" market.
  */
-function phi(x: number): number {
-  const z = x / Math.SQRT2;
-  const az = Math.abs(z);
-  const t = 1 / (1 + 0.3275911 * az);
-  const poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
-  const erf = 1 - poly * Math.exp(-az * az);
-  return 0.5 * (1 + (z >= 0 ? erf : -erf));
-}
-
-/**
- * P(recorded integer temperature lands in the band), treating the forecast
- * error as normal with sd sigma. Recorded values are whole degrees, so the
- * band edges sit on the half-degree: "74 or below" is T <= 74 is T < 74.5.
- */
-function bandProbability(
-  strikeType: string,
-  floor: number | null,
-  cap: number | null,
-  forecastF: number,
-  sigma: number,
-): number | null {
-  const below = (x: number) => phi((x - forecastF) / sigma);
-  switch (strikeType) {
-    case 'less':    return cap === null ? null : below(cap - 0.5);            // T <= cap-1
-    case 'greater': return floor === null ? null : 1 - below(floor - 0.5);    // T >= floor
-    case 'between': return floor === null || cap === null ? null : below(cap + 0.5) - below(floor - 0.5);
-    default:        return null;
-  }
-}
 
 function localDate(isoUtc: string, timezone: string | null): string {
   // YYYY-MM-DD of the instant in the station's zone.
@@ -262,7 +235,7 @@ Deno.serve(handler(async (req) => {
 
     const floor = m.floor_strike === undefined || m.floor_strike === null ? null : Number(m.floor_strike);
     const cap = m.cap_strike === undefined || m.cap_strike === null ? null : Number(m.cap_strike);
-    const prob = bandProbability(String(m.strike_type ?? ''), floor, cap, forecastF, sigma);
+    const prob = temperatureBandProbability(String(m.strike_type ?? ''), floor, cap, forecastF, sigma);
     if (prob === null) continue;
 
     const row = {

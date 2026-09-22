@@ -4,3 +4,4 @@ export * from './score.js';
 export * from './theme.js';
 export * from './fit.js';
 export * from './news-rss.js';
+export * from './anchors.js';
