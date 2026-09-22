@@ -64,6 +64,10 @@ Deno.serve(handler(async (req) => {
         .select('market_id, created_at, payload')
         .gte('created_at', since)
         .contains('payload', { final_state: true })
+        // Only rows that carry raw sub-scores. Without this the page window
+        // fills with the oldest labels, which predate subs, and the job
+        // reports "insufficient" while thousands of usable rows sit past it.
+        .not('payload->subs', 'is', null)
         .order('created_at', { ascending: true })
         .order('id')
         .range(from, to),

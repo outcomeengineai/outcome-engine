@@ -312,8 +312,22 @@ per-category signal health · usage tiers · Polymarket.
 
 Raw 5-minute snapshots are kept 5 days (then rolled up daily), scores 3 days,
 activity 14 days, pg_cron run logs 2 days. The prune runs every six hours
-(`rollup_and_prune_snapshots`). Retention windows are `platform_settings`
-keys and can be changed without a deploy.
+(`prune_all`). Retention windows are `platform_settings` keys and can be
+changed without a deploy. Each step is bounded per run (one day of snapshot
+backlog, 100k scores, 200k membership rows, 50k dead markets), so a run that
+finds a backlog clears it over several calls rather than one statement that
+cannot finish; `select public.prune_all();` in the SQL editor runs one step
+by hand.
+
+Two things are deliberately NOT kept: membership rows for excluded markets
+(exclusion is the absence of membership), and markets that are excluded,
+closed or unseen for a week, and were never priced, scored, or traded. The
+platform learns nothing from those, and together they were most of the
+database. Discovery re-inserts a market if Kalshi lists it again.
+
+If the size climbs anyway, the first place to look is the prune job's own
+log: `cron.job_run_details` for `oe-prune-snapshots`. A failed run rolls
+back everything it did, and nobody reads that log unless asked.
 
 Deleting rows does not shrink the database on disk; Postgres reuses the space
 but the reported size stays. After a large prune -- or if the project has hit
