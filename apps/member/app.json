@@ -6,11 +6,6 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#F1F3F5"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.outcomeengine.member"
@@ -29,7 +24,15 @@
         {
           "color": "#1FBE87"
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F1F3F5",
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": false

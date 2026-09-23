@@ -364,6 +364,19 @@ strike convention (verified 2026-09-22): `greater`/floor 72 is "73 or above",
 
 ### Running the member app
 
+The app is on **Expo SDK 57** (React Native 0.86, React 19, expo-router 57).
+Expo Go from the app stores runs only the current SDK, so the app must track
+it: when Expo Go stops loading the project with a version error, bump `expo`
+in apps/member/package.json to the new SDK and run `npx expo install --fix`
+there, then `npm install` at the root. The 2026-09-23 move from SDK 51 took
+three small code changes (tab `sceneStyle`, `ColorValue` icons, notification
+handler fields) and dropped the hand-written Metro overrides -- since SDK 52
+`expo/metro-config` finds the workspace root itself.
+
+**Node 20.19 or newer is required** (React Native's floor); use the current
+LTS. React is one version across the whole workspace (admin included) --
+two copies of React is the member app's oldest failure mode.
+
 The app bundles for Android/iOS (Expo Go or an EAS build) and for the web
 (`react-native-web`, used for click-through testing in a browser).
 

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, type ColorValue } from 'react-native';
 import { COLORS } from '@outcome/shared';
 
 /**
@@ -7,15 +7,16 @@ import { COLORS } from '@outcome/shared';
  * Billing, Activity, Notifications and Settings are reachable from Home rather
  * than competing for the bottom bar.
  */
-function TabIcon({ glyph, color }: { glyph: string; color: string }) {
+function TabIcon({ glyph, color }: { glyph: string; color: ColorValue }) {
   return <Text style={{ fontSize: 19, color }}>{glyph}</Text>;
 }
 
 export default function TabsLayout() {
   return (
     <Tabs
-      sceneContainerStyle={{ backgroundColor: COLORS.bg }}
       screenOptions={{
+        // React Navigation 7: the scene background moved into screenOptions.
+        sceneStyle: { backgroundColor: COLORS.bg },
         headerStyle: { backgroundColor: COLORS.bg },
         headerShadowVisible: false,
         headerTitleStyle: { fontSize: 16, fontWeight: '600' },
