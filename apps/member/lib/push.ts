@@ -1,6 +1,5 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
@@ -10,23 +9,49 @@ import { supabase } from './supabase';
  * Entirely optional: a member who declines notifications still sees everything
  * in the in-app notification centre, and send-notifications marks rows as sent
  * when there is no device to push to rather than retrying them forever.
+ *
+ * Expo Go on Android has had no remote-push support since SDK 53, and the
+ * expo-notifications module THROWS on use there -- at module load, when the
+ * first version of this file registered its handler, which took the root
+ * layout down with it ("Route ./_layout.tsx is missing the required default
+ * export"). So: the module is imported lazily, only outside Expo Go, and
+ * only from inside a function. In Expo Go push is simply off.
  */
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    // iOS splits the old "alert" into banner and notification list.
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+/** True inside the Expo Go client, where remote push does not exist. */
+export const pushSupported =
+  Constants.executionEnvironment !== ExecutionEnvironment.StoreClient &&
+  (Constants as { appOwnership?: string | null }).appOwnership !== 'expo';
+
+type NotificationsModule = typeof import('expo-notifications');
+
+let notifications: Promise<NotificationsModule> | null = null;
+function loadNotifications(): Promise<NotificationsModule> {
+  notifications ??= import('expo-notifications').then((mod) => {
+    mod.setNotificationHandler({
+      handleNotification: async () => ({
+        // iOS splits the old "alert" into banner and notification list.
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+    return mod;
+  });
+  return notifications;
+}
 
 export async function registerForPush(): Promise<string | null> {
   // Simulators cannot receive push, and asking there produces a confusing
   // permission dialog that can never succeed.
   if (!Device.isDevice) return null;
+  if (!pushSupported) {
+    console.warn('[push] disabled: Expo Go has no remote push. Use a development build to test it.');
+    return null;
+  }
 
+  const Notifications = await loadNotifications();
   const existing = await Notifications.getPermissionsAsync();
   let status = existing.status;
 
