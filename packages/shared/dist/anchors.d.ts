@@ -15,6 +15,11 @@
  * Recorded temperatures are whole degrees, so a strict inequality on an
  * integer strike is an inclusive bound one degree over, and the continuous
  * forecast-error model puts every band edge on a half degree.
+ *
+ * Crypto price markets (KXBTCD, KXBTC, KXETHD) settle on a continuous index
+ * (the 60-second average of CF Benchmarks' BRTI/ERTI at 5pm Eastern), so
+ * there is no half-degree adjustment: "above 95,249.99" is P(S_T > K)
+ * under a zero-drift lognormal with the horizon volatility.
  */
 /** Standard normal CDF via erf (Abramowitz & Stegun 7.1.26, |error| < 1.5e-7). */
 export declare function normalCdf(x: number): number;
@@ -25,4 +30,22 @@ export type StrikeType = 'greater' | 'less' | 'between';
  * strike fields do not describe a band.
  */
 export declare function temperatureBandProbability(strikeType: string, floor: number | null, cap: number | null, forecastF: number, sigma: number): number | null;
+/**
+ * P(S_T < strike) when log(S_T / spot) ~ N(-sigma^2/2, sigma^2). `sigma` is
+ * the volatility over the horizon as a fraction (not annualised). Zero
+ * drift: a prediction market is a bet, and the fair bet has no carry.
+ */
+export declare function probBelow(spot: number, strike: number, sigma: number): number;
+/** P(the settlement price satisfies the market). Null when the strikes do not describe a band. */
+export declare function priceBandProbability(strikeType: string, floor: number | null, cap: number | null, spot: number, sigma: number): number | null;
+/**
+ * Sample standard deviation of log returns between consecutive closes,
+ * in chronological order. Null below 20 observations: a volatility from a
+ * handful of candles is a guess wearing a decimal point.
+ */
+export declare function logReturnSigma(closes: number[]): number | null;
+/** Volatility over `steps` periods from a per-period volatility (square-root of time). */
+export declare function scaleSigma(sigmaPerStep: number, steps: number): number;
+/** Per-step volatility equivalent to an annualised one, for a step of `stepSeconds`. */
+export declare function annualToStepSigma(annual: number, stepSeconds: number): number;
 //# sourceMappingURL=anchors.d.ts.map

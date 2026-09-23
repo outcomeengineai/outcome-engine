@@ -634,6 +634,41 @@ function temperatureBandProbability(strikeType, floor, cap, forecastF, sigma) {
       return null;
   }
 }
+function probBelow(spot, strike, sigma) {
+  if (!(spot > 0) || !(strike > 0) || !(sigma > 0)) return NaN;
+  return normalCdf((Math.log(strike / spot) + sigma * sigma / 2) / sigma);
+}
+function priceBandProbability(strikeType, floor, cap, spot, sigma) {
+  if (!(spot > 0) || !(sigma > 0)) return null;
+  switch (strikeType) {
+    case "less":
+      return cap === null ? null : probBelow(spot, cap, sigma);
+    case "greater":
+    case "greater_or_equal":
+      return floor === null ? null : 1 - probBelow(spot, floor, sigma);
+    case "between":
+      return floor === null || cap === null ? null : probBelow(spot, cap, sigma) - probBelow(spot, floor, sigma);
+    default:
+      return null;
+  }
+}
+function logReturnSigma(closes) {
+  const r = [];
+  for (let i = 1; i < closes.length; i++) {
+    const a = closes[i - 1], b = closes[i];
+    if (a > 0 && b > 0) r.push(Math.log(b / a));
+  }
+  if (r.length < 20) return null;
+  const mean = r.reduce((s, x) => s + x, 0) / r.length;
+  const varr = r.reduce((s, x) => s + (x - mean) ** 2, 0) / (r.length - 1);
+  return Math.sqrt(varr);
+}
+function scaleSigma(sigmaPerStep, steps) {
+  return sigmaPerStep * Math.sqrt(Math.max(0, steps));
+}
+function annualToStepSigma(annual, stepSeconds) {
+  return annual * Math.sqrt(stepSeconds / 31536e3);
+}
 export {
   BAND_COLORS,
   COLORS,
@@ -653,6 +688,7 @@ export {
   SIGNAL_LABELS,
   activeWeights,
   allocateSettlementCents,
+  annualToStepSigma,
   breakevenHitRate,
   clampScore,
   cleanText,
@@ -669,6 +705,7 @@ export {
   impliedBlendWeights,
   isStrongPick,
   kalshiFeeCents,
+  logReturnSigma,
   marketTerms,
   matchesTerms,
   netIfHitCents,
@@ -679,12 +716,15 @@ export {
   periodTotals,
   pickSide,
   predictProb,
+  priceBandProbability,
+  probBelow,
   profitIfWinCents,
   quoteStake,
   realizedPnlCents,
   retuneRecommendation,
   roundCents,
   roundScore,
+  scaleSigma,
   scoreBand,
   scoreChangedMaterially,
   sidePriceCents,

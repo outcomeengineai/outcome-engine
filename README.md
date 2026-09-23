@@ -345,6 +345,23 @@ If the project is already in read-only mode, prefix the session with
 `set default_transaction_read_only = off;` before pruning and vacuuming.
 Migrations cannot apply while the project is read-only, so this comes first.
 
+### Anchors
+
+An anchor is an independent probability for a market from a source outside
+its price, recorded on every thesis and graded by Brier score against the
+market's own price (`anchor_calibration`, `anchor_summary`, per source). An
+anchor earns a weight in a model version only on that evidence. Sources:
+
+| source | markets | cadence | how |
+|---|---|---|---|
+| `nws` | daily high/low temperature (`KXHIGH*`, `KXLOW*`) | hourly | NWS grid forecast, normal error by lead; whole-degree band edges on the half degree; withdrawn once the day's value is observed |
+| `coinbase` | daily BTC/ETH price (`KXBTCD`, `KXBTC`, `KXETHD`) | 5 min | spot and 24h realised volatility from Coinbase, zero-drift lognormal to 5pm ET settlement; withdrawn inside the last two minutes |
+
+The band math is in `packages/shared/src/anchors.ts` and tested there. Kalshi's
+strike convention (verified 2026-09-22): `greater`/floor 72 is "73 or above",
+`less`/cap 65 is "64 or below", `between` is inclusive. Tunables live under
+`thresholds.anchors` on the model version.
+
 ### Running the member app
 
 The app bundles for Android/iOS (Expo Go or an EAS build) and for the web

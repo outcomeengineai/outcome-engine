@@ -1,5 +1,11 @@
 /**
- * Anchor fetch — scheduled, hourly. Source: NWS (api.weather.gov).
+ * Anchor fetch. Two sources behind one function:
+ *
+ *   (no body)            NWS temperature forecasts, hourly.
+ *   {source: 'crypto'}   Coinbase spot for BTC/ETH price markets, every five
+ *                        minutes. See ./crypto.ts.
+ *
+ * Source: NWS (api.weather.gov).
  *
  * For every open daily-temperature market on a known station: read the NWS
  * grid forecast for that station and date, and turn the market's strike band
@@ -14,11 +20,12 @@
  * fetch per station per run covers every market on that station.
  */
 
-import { handler, json, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
+import { handler, json, readJson, requireCronOrAdmin, serviceClient } from '../_shared/http.ts';
 import { getMarketsByTickers, type KalshiMarket } from '../_shared/kalshi.ts';
 import { logActivity } from '../_shared/log.ts';
 import { selectPaged } from '../_shared/batch.ts';
 import { temperatureBandProbability } from '../_shared/outcome-shared.mjs';
+import { CRYPTO_DEFAULTS, runCryptoAnchors, type CryptoSettings } from './crypto.ts';
 
 const NWS_HEADERS = {
   'User-Agent': 'outcome-engine (admin@outcomeengine.ai)',
@@ -126,6 +133,16 @@ Deno.serve(handler(async (req) => {
     ...((version?.thresholds as { anchors?: Partial<AnchorSettings> })?.anchors ?? {}),
   };
   if (!settings.enabled) return json({ ok: true, skipped: 'anchors disabled on the stable version' });
+
+  const body = await readJson<{ source?: string }>(req);
+  if (body.source === 'crypto') {
+    const crypto: CryptoSettings = {
+      ...CRYPTO_DEFAULTS,
+      ...((version?.thresholds as { anchors?: { crypto?: Partial<CryptoSettings> } })?.anchors?.crypto ?? {}),
+    };
+    if (!crypto.enabled) return json({ ok: true, skipped: 'crypto anchors disabled on the stable version' });
+    return json(await runCryptoAnchors(db, crypto));
+  }
 
   // ---- candidate markets: open daily-temperature markets being priced ----
   const candidates = await selectPaged<{ id: string; expected_close: string | null; close_time: string | null }>(
